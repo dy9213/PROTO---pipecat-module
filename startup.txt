@@ -1,0 +1,3 @@
+1. npm install       # first time only — installs Electron
+2. npm run bootstrap # first time only — creates Python venv
+3. npm start

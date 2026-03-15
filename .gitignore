@@ -1,0 +1,9 @@
+venv/
+node_modules/
+data/settings.json
+data/*.onnx
+.env
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

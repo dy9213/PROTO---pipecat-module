@@ -1,0 +1,14 @@
+{
+  "name": "voice-chat-demo",
+  "version": "1.0.0",
+  "description": "Electron voice chat demo — PTT, live mode, text",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron app/main.js",
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "dev": "NODE_ENV=development electron app/main.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
