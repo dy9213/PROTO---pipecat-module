@@ -219,13 +219,13 @@
   #live-overlay {
     display: none;
     position: absolute;
-    bottom: 72px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
     background: rgba(79, 142, 247, 0.12);
-    border: 1px solid rgba(79, 142, 247, 0.35);
-    border-radius: 14px;
-    padding: 12px 24px;
+    border-top: 1px solid rgba(79, 142, 247, 0.35);
+    padding: 10px 12px;
     text-align: center;
     backdrop-filter: blur(4px);
     z-index: 10;
@@ -392,6 +392,7 @@
       <div class="lang-toggle">
         <button class="lang-btn active" id="lang-en" onclick="setLang('en')">EN</button>
         <button class="lang-btn"        id="lang-ja" onclick="setLang('ja')">JP</button>
+        <button class="lang-btn"        id="lang-zh" onclick="setLang('zh')">ZH</button>
       </div>
       <button id="save-btn" onclick="saveEndpoints()">Save</button>
       <span id="save-status"></span>
@@ -403,6 +404,10 @@
     <div class="system-prompt-row" style="margin-top:6px">
       <label>System Prompt — JA</label>
       <textarea id="system-prompt-ja" class="system-prompt-input" placeholder="あなたは役立つ音声アシスタントです。日本語で簡潔に回答してください。" spellcheck="false" rows="3"></textarea>
+    </div>
+    <div class="system-prompt-row" style="margin-top:6px">
+      <label>System Prompt — ZH</label>
+      <textarea id="system-prompt-zh" class="system-prompt-input" placeholder="你是一个有用的语音助手。请用中文简洁地回答。" spellcheck="false" rows="3"></textarea>
     </div>
   </div>
 </div>
@@ -476,6 +481,7 @@ async function loadSettings() {
     document.getElementById('llm-key-input').value       = s.llm_api_key    || ''
     document.getElementById('system-prompt-en').value = s.system_prompt_en || ''
     document.getElementById('system-prompt-ja').value = s.system_prompt_ja || ''
+    document.getElementById('system-prompt-zh').value = s.system_prompt_zh || ''
     currentLang = s.language || 'en'
     updateLangUI()
     checkConfigWarning()
@@ -494,6 +500,7 @@ function setLang(lang) {
 function updateLangUI() {
   document.getElementById('lang-en').classList.toggle('active', currentLang === 'en')
   document.getElementById('lang-ja').classList.toggle('active', currentLang === 'ja')
+  document.getElementById('lang-zh').classList.toggle('active', currentLang === 'zh')
 }
 
 function checkConfigWarning() {
@@ -514,10 +521,12 @@ async function saveEndpoints() {
     llm_model:     document.getElementById('model-input').value.trim(),
     llm_api_key:   document.getElementById('llm-key-input').value.trim(),
     language:      currentLang,
-    voice_en:      'af_heart',
-    voice_ja:      'jf_alpha',
+    voice_en:      'Ryan',
+    voice_ja:      'Ono_Anna',
+    voice_zh:      'Vivian',
     system_prompt_en: document.getElementById('system-prompt-en').value.trim(),
     system_prompt_ja: document.getElementById('system-prompt-ja').value.trim(),
+    system_prompt_zh: document.getElementById('system-prompt-zh').value.trim(),
   }
   document.getElementById('save-status').textContent = 'Saving…'
   try {

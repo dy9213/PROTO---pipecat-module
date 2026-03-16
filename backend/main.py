@@ -11,6 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
+# ── debug ──────────────────────────────────────────────────────────────────────
+DEBUG_RAW_SSE = False   # set True to print every raw SSE line from the LLM
+DEBUG_VAD     = False   # set True to print VAD prob + silence window counts
+
 # ── constants ──────────────────────────────────────────────────────────────────
 VAD_THRESHOLD      = 0.4    # Silero speech probability threshold
 VAD_ONSET_CHUNKS   = 2      # consecutive above-threshold windows to confirm onset (~64ms)
@@ -56,19 +60,28 @@ DEFAULT_SETTINGS = {
     "llm_model":       "",
     "llm_api_key":     "",
     "language":        "en",
-    "voice_en":        "af_heart",
-    "voice_ja":        "jf_alpha",
+    "voice_en":        "Ryan",
+    "voice_ja":        "Ono_Anna",
+    "voice_zh":        "Vivian",
     "system_prompt_en": "",
     "system_prompt_ja": "",
+    "system_prompt_zh": "",
 }
+TTS_LANGUAGE_MAP = {
+    "en": "English",
+    "ja": "Japanese",
+    "zh": "Chinese",
+}
+
 DEFAULT_SYSTEM_PROMPTS = {
     "en": "You are a helpful voice assistant. Respond concisely in English.",
     "ja": "あなたは役立つ音声アシスタントです。日本語で簡潔に回答してください。",
+    "zh": "你是一个有用的语音助手。请用中文简洁地回答。",
 }
 
 def get_system_prompt(s: dict) -> str:
     lang = s.get("language", "en")
-    key  = "system_prompt_ja" if lang == "ja" else "system_prompt_en"
+    key  = f"system_prompt_{lang}"
     sp   = s.get(key, "").strip()
     return sp if sp else DEFAULT_SYSTEM_PROMPTS.get(lang, DEFAULT_SYSTEM_PROMPTS["en"])
 
@@ -125,8 +138,10 @@ class SettingsIn(BaseModel):
     language:      str = "en"
     voice_en:        str = "af_heart"
     voice_ja:        str = "jf_alpha"
+    voice_zh:        str = "zf_xiaobei"
     system_prompt_en: str = ""
     system_prompt_ja: str = ""
+    system_prompt_zh: str = ""
 
 @app.post("/settings")
 async def post_settings(body: SettingsIn):
@@ -184,6 +199,8 @@ async def chat_stream(body: ChatIn):
                                  json={"model": s.get("llm_model") or "local-model", "messages": messages, "stream": True,
                                        "tool_ids": ["local_web_search"]}) as r:
                 async for line in r.aiter_lines():
+                    if DEBUG_RAW_SSE:
+                        print(f"[sse/chat] {line}", flush=True)
                     if line.startswith("data: "):
                         yield (line + "\n\n").encode()
 
@@ -196,11 +213,12 @@ class TTSIn(BaseModel):
 @app.post("/tts")
 async def tts(body: TTSIn):
     s = load_settings()
-    voice = s["voice_ja"] if body.language == "ja" else s["voice_en"]
+    voice = s.get(f"voice_{body.language}", s["voice_en"])
+    tts_lang = TTS_LANGUAGE_MAP.get(body.language, "English")
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(
             s["tts_endpoint"].rstrip("/") + "/v1/audio/speech",
-            json={"model": "kokoro", "input": body.text, "voice": voice, "response_format": "wav"},
+            json={"model": "qwen3-tts", "input": body.text, "voice": voice, "language": tts_lang, "response_format": "wav"},
         )
         r.raise_for_status()
     return Response(content=r.content, media_type="audio/wav")
@@ -264,6 +282,8 @@ async def live(ws: WebSocket):
                                      json={"model": s.get("llm_model") or "local-model", "stream": True,
                                            "messages": messages, "tool_ids": ["local_web_search"]}) as resp:
                 async for line in resp.aiter_lines():
+                    if DEBUG_RAW_SSE:
+                        print(f"[sse/live] {line}", flush=True)
                     if not line.startswith("data: "): continue
                     data = line[6:]
                     if data == "[DONE]": break
@@ -278,11 +298,12 @@ async def live(ws: WebSocket):
 
             if full_text:
                 conv_messages.append({"role": "assistant", "content": full_text})
-                voice = s["voice_ja"] if s["language"] == "ja" else s["voice_en"]
+                voice = s.get(f"voice_{s['language']}", s["voice_en"])
+                tts_lang = TTS_LANGUAGE_MAP.get(s["language"], "English")
                 await send_json({"type": "tts_start"})
                 r2 = await client.post(
                     s["tts_endpoint"].rstrip("/") + "/v1/audio/speech",
-                    json={"model": "kokoro", "input": full_text, "voice": voice, "response_format": "wav"},
+                    json={"model": "qwen3-tts", "input": full_text, "voice": voice, "language": tts_lang, "response_format": "wav"},
                 )
                 r2.raise_for_status()
                 await ws.send_bytes(r2.content)
@@ -349,10 +370,11 @@ async def live(ws: WebSocket):
                     vad_buf = vad_buf[VAD_CHUNK:]
                     prob, vad_state = _vad_infer(window, vad_state)
                     above = prob >= VAD_THRESHOLD
-                    _now = asyncio.get_event_loop().time()
-                    if _now - _vad_last_log >= 0.5:
-                        _vad_last_log = _now
-                        print(f"[vad] prob={prob:.3f} above={above} in_speech={in_speech}", flush=True)
+                    if DEBUG_VAD:
+                        _now = asyncio.get_event_loop().time()
+                        if _now - _vad_last_log >= 0.5:
+                            _vad_last_log = _now
+                            print(f"[vad] prob={prob:.3f} above={above} in_speech={in_speech} silence={silence_windows}/{SILENCE_WINDOWS} onset={onset_streak}/{VAD_ONSET_CHUNKS}", flush=True)
 
                     if not in_speech:
                         if above:
