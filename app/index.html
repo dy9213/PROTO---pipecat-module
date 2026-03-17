@@ -237,6 +237,21 @@
   #chat-list::-webkit-scrollbar { width: 4px; }
   #chat-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+  .bubble-tts-status {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .bubble-tts-status.interrupted {
+    color: var(--accent);
+    animation: tts-blink 0.7s ease forwards;
+  }
+  @keyframes tts-blink {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
   .bubble-wrap {
     display: flex;
     flex-direction: column;
@@ -896,8 +911,7 @@ async function streamLLMResponse(userText) {
   } catch (e) {
     document.getElementById(bubbleId)?.remove()
     if (e.name !== 'AbortError') throw e
-    // aborted — return empty (caller decides what to do with partial)
-    return ''
+    return null  // aborted before DONE — always undo the user prompt
   } finally {
     llmAbortController = null
   }
@@ -1028,7 +1042,12 @@ function getAudioCtx() {
 let pttAudioSrc = null
 
 function stopPTTAudio() {
-  if (pttAudioSrc) { try { pttAudioSrc.stop() } catch {} ; pttAudioSrc = null }
+  if (pttAudioSrc) {
+    try { pttAudioSrc.stop() } catch {}
+    pttAudioSrc = null
+    setBubbleTtsStatus(_ttsActiveBubbleWrap, 'interrupted')
+    _ttsActiveBubbleWrap = null
+  }
 }
 
 async function fetchAndPlayTTS(text) {
@@ -1044,9 +1063,10 @@ async function fetchAndPlayTTS(text) {
   src.buffer = decoded
   src.connect(ctx.destination)
   pttAudioSrc = src
-  src.onended = () => { pttAudioSrc = null }
+  _ttsActiveBubbleWrap = chatList.querySelector('.bubble-wrap.assistant:last-child') || null
+  setBubbleTtsStatus(_ttsActiveBubbleWrap, 'playback')
   src.start()
-  return new Promise((res) => { src.onended = () => { pttAudioSrc = null; res() } })
+  return new Promise((res) => { src.onended = () => { pttAudioSrc = null; setBubbleTtsStatus(_ttsActiveBubbleWrap, null); _ttsActiveBubbleWrap = null; res() } })
 }
 
 // ── UI state helpers ───────────────────────────────────────────────────────────
@@ -1076,6 +1096,16 @@ function isPTTEligible() {
   return true
 }
 
+function undoLastUserMessage() {
+  // Remove the last user entry from chatHistory
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].role === 'user') { chatHistory.splice(i, 1); break }
+  }
+  // Remove the last user bubble from DOM
+  const userBubbles = chatList.querySelectorAll('.bubble-wrap.user')
+  userBubbles[userBubbles.length - 1]?.remove()
+}
+
 // ── processPTT ─────────────────────────────────────────────────────────────────
 async function processPTT(chunks) {
   try {
@@ -1085,7 +1115,12 @@ async function processPTT(chunks) {
     if (!transcript.trim()) return
     appendUserMessage(transcript, 'voice')
     const assistantText = await streamLLMResponse(transcript)
-    if (state !== STATE.PTT_PROCESSING) return   // aborted mid-LLM
+    if (state !== STATE.PTT_PROCESSING) {
+      // null = aborted before LLM [DONE] → erase turn
+      // non-null = LLM finished, audio was interrupted → bubbles stay
+      if (assistantText === null) undoLastUserMessage()
+      return
+    }
     if (assistantText) await fetchAndPlayTTS(assistantText)
   } catch (e) {
     if (e.name !== 'AbortError') appendErrorMessage('Error: ' + (e.message || String(e)))
@@ -1142,8 +1177,33 @@ let liveWS            = null
 let liveQueuedSrcs    = []
 let livePlaybackGated = false  // true only while TTS is playing — gates binary audio
 let liveInterruptSent = false  // prevent duplicate interrupt messages per TTS turn
+let liveDecodingCount = 0      // pending decodeAudioData calls — prevents missed spacebar during async decode
 let interruptStreak   = 0      // consecutive above-threshold chunks during TTS
 let _liveTurnText     = ''     // accumulates assistant tokens for the current live turn
+let _lastInterruptTime = 0     // debounce: timestamp of last liveInterrupt() call
+
+let _ttsActiveBubbleWrap = null  // last assistant bubble-wrap during TTS
+let _liveLLMDone = false         // true once tts_start received — LLM [DONE] was reached
+
+function setBubbleTtsStatus(wrapEl, mode) {
+  if (!wrapEl) return
+  wrapEl.querySelector('.bubble-tts-status')?.remove()
+  if (!mode) return
+  let meta = wrapEl.querySelector('.bubble-meta')
+  if (!meta) {
+    meta = document.createElement('div')
+    meta.className = 'bubble-meta'
+    wrapEl.appendChild(meta)
+  }
+  const span = document.createElement('span')
+  span.className = 'bubble-tts-status'
+  span.textContent = mode === 'playback' ? '▶ playback' : '✕ interrupted'
+  if (mode === 'interrupted') {
+    span.classList.add('interrupted')
+    setTimeout(() => span.remove(), 800)
+  }
+  meta.appendChild(span)
+}
 
 // preBuffer: PCM ArrayBuffer[] captured during PTT_RECORDING before live transition
 async function enterLiveMode(preBuffer = []) {
@@ -1225,8 +1285,13 @@ async function enterLiveMode(preBuffer = []) {
             audioBuffer = ctx.createBuffer(1, f32.length, liveTtsSampleRate)
             audioBuffer.copyToChannel(f32, 0)
           } else {
-            // full WAV blob — decode normally
-            audioBuffer = await ctx.decodeAudioData(e.data.slice(0))
+            // full WAV blob — decode normally (async; track so spacebar sees pending decode)
+            liveDecodingCount++
+            try {
+              audioBuffer = await ctx.decodeAudioData(e.data.slice(0))
+            } finally {
+              liveDecodingCount--
+            }
           }
           if (liveInterruptSent) return
           const node = ctx.createBufferSource()
@@ -1241,6 +1306,7 @@ async function enterLiveMode(preBuffer = []) {
       try {
         const msg = JSON.parse(e.data)
         if (msg.type === 'transcript' && msg.final) {
+          _liveLLMDone = false
           appendUserMessage(msg.text, 'voice')
           startAssistantBubble()
         } else if (msg.type === 'token') {
@@ -1257,7 +1323,10 @@ async function enterLiveMode(preBuffer = []) {
           livePlaybackGated = true
           liveInterruptSent = false
           interruptStreak = 0
+          _liveLLMDone = true
           if (msg.sample_rate) liveTtsSampleRate = msg.sample_rate
+          _ttsActiveBubbleWrap = chatList.querySelector('.bubble-wrap.assistant:last-child') || null
+          setBubbleTtsStatus(_ttsActiveBubbleWrap, 'playback')
         } else if (msg.type === 'tts_end') {
           if (_liveTurnText)
             chatHistory.push({ role: 'assistant', content: _liveTurnText, source: 'voice', timestamp: Date.now() })
@@ -1265,10 +1334,30 @@ async function enterLiveMode(preBuffer = []) {
           livePlaybackGated = false
           liveInterruptSent = false
           interruptStreak = 0
+          setBubbleTtsStatus(_ttsActiveBubbleWrap, null)
+          _ttsActiveBubbleWrap = null
         } else if (msg.type === 'interrupted') {
+          const llmWasDone = _liveLLMDone  // snapshot before resets
           livePlaybackGated = false
           liveInterruptSent = false
+          liveDecodingCount = 0
           interruptStreak = 0
+          _liveLLMDone = false
+          // ── interrupt decision tree ──────────────────────────────
+          // Audio already stopped by liveInterrupt() → cancelLivePlayback()
+          //
+          // Was LLM done? (tts_start received = [DONE] was reached)
+          //   NO  → erase turn: remove assistant bubble + undo user prompt
+          //   YES → audio-only interrupt: bubbles stay, show badge
+          // ────────────────────────────────────────────────────────
+          if (!llmWasDone) {
+            chatList.querySelector('.bubble-wrap.assistant:last-child')?.remove()
+            undoLastUserMessage()
+            _ttsActiveBubbleWrap = null
+          } else {
+            setBubbleTtsStatus(_ttsActiveBubbleWrap, 'interrupted')
+            _ttsActiveBubbleWrap = null
+          }
         } else if (msg.type === 'error') {
           console.error('Live error:', msg.message)
           appendUserMessage('[Live mode error: ' + msg.message + ']', 'voice')
@@ -1304,6 +1393,9 @@ function cancelLivePlayback() {
 }
 
 function liveInterrupt() {
+  const now = Date.now()
+  if (now - _lastInterruptTime < 500) return  // debounce — ignore rapid repeated presses
+  _lastInterruptTime = now
   if (liveInterruptSent) return
   cancelLivePlayback()
   liveInterruptSent = true
@@ -1315,7 +1407,11 @@ function cleanupLive() {
   console.log('[live] cleanupLive called from:'); console.trace()
   livePlaybackGated = false
   liveInterruptSent = false
+  liveDecodingCount = 0
   interruptStreak = 0
+  _liveLLMDone = false
+  setBubbleTtsStatus(_ttsActiveBubbleWrap, null)
+  _ttsActiveBubbleWrap = null
   cancelLivePlayback()
   // tear down shared capture
   if (captureWorklet) { captureWorklet.port.onmessage = null; captureWorklet.disconnect(); captureWorklet = null }
@@ -1383,13 +1479,36 @@ function cancelLiveModeTimer() {
   resetArc()
 }
 
+// ── delete latest block ────────────────────────────────────────────────────────
+function deleteLatestBlock() {
+  // Remove last user entry and everything after it in chatHistory
+  const idx = chatHistory.findLastIndex(m => m.role === 'user')
+  if (idx === -1) return
+  chatHistory.splice(idx)
+
+  // Remove last user bubble and all following siblings (assistant bubble, error bubble, etc.)
+  const lastUser = [...chatList.querySelectorAll('.bubble-wrap.user')].at(-1)
+  if (!lastUser) return
+  let el = lastUser
+  while (el) { const next = el.nextElementSibling; el.remove(); el = next }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Backspace' && e.code !== 'Delete') return
+  const active = document.activeElement
+  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return
+  if (state !== STATE.IDLE) return
+  e.preventDefault()
+  deleteLatestBlock()
+})
+
 // ── space bar state machine ────────────────────────────────────────────────────
 document.addEventListener('keydown', async (e) => {
   if (e.code !== 'Space') return
   if (e.repeat) return
   if (document.getElementById('config-bar').classList.contains('open')) return
   if (state === STATE.LIVE_ACTIVE) {
-    if (livePlaybackGated || liveQueuedSrcs.length > 0) {
+    if (livePlaybackGated || liveQueuedSrcs.length > 0 || liveDecodingCount > 0) {
       liveInterrupt()   // stop TTS, signal backend, stay in live mode
     } else {
       exitLiveMode()
@@ -1397,8 +1516,16 @@ document.addEventListener('keydown', async (e) => {
     return
   }
   if (state === STATE.PTT_PROCESSING) {
-    abortLLM()          // cancel in-flight LLM request
-    stopPTTAudio()      // cut TTS playback if already in that phase
+    // ── interrupt decision tree ──────────────────────────────────
+    // abortLLM()    → no-op if LLM already done; cancels stream if still generating
+    // stopPTTAudio() → no-op if audio not playing; stops audio + shows badge if playing
+    //
+    // Was LLM done? (processPTT checks assistantText after streamLLMResponse returns)
+    //   NO  (streamLLMResponse returns null) → processPTT calls undoLastUserMessage()
+    //   YES (audio was playing, stopPTTAudio fired badge) → bubbles stay
+    // ────────────────────────────────────────────────────────────
+    abortLLM()
+    stopPTTAudio()
     // set IDLE directly so processPTT's finally guard won't clobber the new recording state
     state = STATE.IDLE
     beginPTTRecording()
