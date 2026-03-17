@@ -523,8 +523,14 @@ async def live(ws: WebSocket):
             await send_json({"type": "error", "message": str(e)})
         finally:
             processing = False
-            active_reqs.remove(client)
-            await client.aclose()
+            try:
+                active_reqs.remove(client)
+            except ValueError:
+                pass  # interrupt handler already removed it
+            try:
+                await client.aclose()
+            except Exception:
+                pass  # already closed by interrupt handler
 
     audio_chunks_received = 0
     try:
