@@ -21,14 +21,16 @@ $PYTHON -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r backend/requirements.txt
+pip install duckduckgo-search
 
 # Install mlx-audio on Apple Silicon only
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ] && [[ "$(uname -s)" == "Darwin" ]]; then
-  echo "Apple Silicon detected — installing mlx-audio for local TTS…"
+  echo "Apple Silicon detected — installing mlx-audio and mlx-whisper for local TTS/STT…"
   pip install mlx-audio
+  pip install mlx-whisper
 else
-  echo "Skipping mlx-audio (Apple Silicon only)"
+  echo "Skipping mlx-audio / mlx-whisper (Apple Silicon only)"
 fi
 
 mkdir -p data

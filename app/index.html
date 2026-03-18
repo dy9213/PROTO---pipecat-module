@@ -37,6 +37,12 @@
     background: var(--surface);
     flex-shrink: 0;
   }
+  #config-bar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 10px;
+  }
   #config-toggle {
     display: flex;
     align-items: center;
@@ -46,8 +52,23 @@
     user-select: none;
     color: var(--text-dim);
     font-size: 12px;
+    flex: 1;
   }
   #config-toggle:hover { color: var(--text); }
+  #online-btn {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #online-btn.active {
+    border-color: var(--green);
+    color: var(--green);
+  }
   #config-chevron { transition: transform 0.2s; font-size: 10px; }
   #config-bar.open #config-chevron { transform: rotate(180deg); }
   #config-panel {
@@ -94,6 +115,40 @@
     border-color: var(--accent);
     color: var(--accent);
   }
+
+  #stt-model-select {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+  #stt-load-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #stt-load-btn:hover { color: var(--text); }
+  #stt-load-btn.loading {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #stt-load-status {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  #stt-load-status.ok  { color: var(--green); }
+  #stt-load-status.err { color: var(--red); }
 
   .status-dot {
     width: 8px; height: 8px;
@@ -182,12 +237,37 @@
   #chat-list::-webkit-scrollbar { width: 4px; }
   #chat-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+  .bubble-tts-status {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .bubble-tts-status.interrupted {
+    color: var(--accent);
+    animation: tts-blink 0.7s ease forwards;
+  }
+  @keyframes tts-blink {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .bubble-no-audio { animation: bubble-no-audio 0.45s ease; }
+  @keyframes bubble-no-audio {
+    0%, 100% { opacity: 1; }
+    30%, 70%  { opacity: 0.2; }
+  }
+
   .bubble-wrap {
     display: flex;
     flex-direction: column;
   }
   .bubble-wrap.user  { align-items: flex-end; }
-  .bubble-wrap.assistant { align-items: flex-start; }
+  .bubble-wrap.assistant {
+    display: grid;
+    grid-template-columns: auto;
+    align-self: flex-start;
+    max-width: 70%;
+  }
 
   .bubble {
     max-width: 70%;
@@ -204,6 +284,43 @@
   .bubble-wrap.assistant .bubble {
     background: var(--surface2);
     border-bottom-left-radius: 4px;
+    max-width: unset;
+  }
+
+  .bubble-chevron {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 3px;
+    margin-left: auto;
+    opacity: 0.5;
+    transition: opacity 0.15s, transform 0.2s;
+    user-select: none;
+  }
+  .bubble-chevron:hover { opacity: 1; }
+  .bubble-chevron.open { transform: rotate(180deg); opacity: 1; }
+
+  .bubble-translation {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.28s ease, opacity 0.2s ease;
+    opacity: 0;
+  }
+  .bubble-translation.open {
+    max-height: 600px;
+    opacity: 1;
+  }
+  .bubble-translation-inner {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   .bubble-meta {
     font-size: 10px;
@@ -215,6 +332,53 @@
     gap: 4px;
   }
   .mic-icon { font-size: 10px; }
+
+  /* ── voice bubble audio row ── */
+  .bubble-audio-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    margin-bottom: 6px;
+    max-height: 60px;
+    overflow: hidden;
+    opacity: 1;
+    transition: max-height 0.3s ease, opacity 0.25s ease,
+                padding 0.3s ease, margin 0.3s ease, border-color 0.25s ease;
+  }
+  .bubble-wrap.user .bubble-audio-row { display: none; }
+  .bubble-audio-row.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-color: transparent;
+  }
+  .bubble-play-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: var(--text);
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .bubble-play-btn:hover { background: rgba(255,255,255,0.28); }
+  .bubble-play-btn.playing { background: rgba(255,255,255,0.22); }
+
+  .error-bubble {
+    background: rgba(224, 85, 85, 0.12);
+    border: 1px solid rgba(224, 85, 85, 0.35);
+    color: var(--red);
+    font-size: 12px;
+  }
 
   /* typing indicator */
   .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
@@ -347,6 +511,30 @@
   #send-btn:hover { opacity: 0.85; }
   #send-btn:disabled { opacity: 0.4; cursor: default; }
 
+  #translate-btn {
+    padding: 0 12px;
+    height: 38px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #translate-btn:hover { border-color: var(--accent); color: var(--text); }
+  #translate-btn:disabled { opacity: 0.35; cursor: default; }
+  #translate-btn.translating {
+    animation: translate-pulse 0.8s ease-in-out infinite;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  @keyframes translate-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
   #stop-btn {
     padding: 0 14px;
     height: 38px;
@@ -367,20 +555,75 @@
     text-align: center;
     margin-top: 5px;
   }
+
+  /* ── text context menu ── */
+  #ctx-menu {
+    position: fixed;
+    display: none;
+    flex-direction: row;
+    z-index: 9999;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    gap: 2px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #ctx-menu.visible { display: flex; }
+  /* downward caret pointing at the selection */
+  #ctx-menu::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border);
+  }
+  #ctx-menu::before {
+    content: '';
+    position: absolute;
+    top: calc(100% - 1px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--surface);
+    z-index: 1;
+  }
+  #ctx-menu button {
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  #ctx-menu button:hover { background: var(--surface2); }
 </style>
 </head>
 <body>
 
 <!-- Config bar -->
 <div id="config-bar">
-  <div id="config-toggle" onclick="toggleConfig()">
-    <span id="config-chevron">▼</span>
-    <span>Config</span>
-    <span id="config-warning" style="color:#e09944;font-size:11px;margin-left:6px;display:none">⚠ Not configured</span>
+  <div id="config-bar-header">
+    <div id="config-toggle" onclick="toggleConfig()">
+      <span id="config-chevron">▼</span>
+      <span>Config</span>
+      <span id="config-warning" style="color:#e09944;font-size:11px;margin-left:6px;display:none">⚠ Not configured</span>
+    </div>
+    <button id="online-btn" onclick="toggleOnline()">🌐 Offline</button>
   </div>
   <div id="config-panel">
-    <div class="endpoint-row">
+    <div class="endpoint-row" id="stt-model-row">
       <label>STT</label>
+      <select id="stt-model-select" onchange="onSttModelChange()"></select>
+      <button id="stt-load-btn" onclick="loadSttModel()">Load</button>
+      <span id="stt-load-status"></span>
+    </div>
+    <div class="endpoint-row" id="stt-endpoint-row" style="display:none">
+      <label></label>
       <input id="stt-input" type="text" placeholder="http://…" spellcheck="false">
       <div class="status-dot" id="dot-stt"></div>
     </div>
@@ -414,6 +657,17 @@
         <button class="lang-btn active" id="lang-en" onclick="setLang('en')">EN</button>
         <button class="lang-btn"        id="lang-ja" onclick="setLang('ja')">JP</button>
         <button class="lang-btn"        id="lang-zh" onclick="setLang('zh')">ZH</button>
+      </div>
+      <span style="font-size:11px;color:var(--text-dim);flex-shrink:0">→</span>
+      <div class="lang-toggle">
+        <button class="lang-btn active" id="trans-en" onclick="setTranslateTo('en')">EN</button>
+        <button class="lang-btn"        id="trans-ja" onclick="setTranslateTo('ja')">JP</button>
+        <button class="lang-btn"        id="trans-zh" onclick="setTranslateTo('zh')">ZH</button>
+      </div>
+      <div class="lang-toggle">
+        <button class="lang-btn" onclick="adjustScale(-10)">A−</button>
+        <span id="scale-label" style="font-size:10px;color:var(--text-dim);padding:0 4px;min-width:34px;text-align:center">100%</span>
+        <button class="lang-btn" onclick="adjustScale(+10)">A+</button>
       </div>
       <button id="save-btn" onclick="saveEndpoints()">Save</button>
       <span id="save-status"></span>
@@ -457,9 +711,15 @@
     </div>
     <textarea id="text-input" placeholder="Type a message…" rows="1"></textarea>
     <button id="stop-btn" onclick="stopGeneration()" style="display:none">Stop</button>
-<button id="send-btn" onclick="sendText()">Send</button>
+    <button id="translate-btn" onclick="translateInput()" title="Translate to chat language">⇄</button>
+    <button id="send-btn" onclick="sendText()">Send</button>
   </div>
   <div id="space-hint">Hold SPACE to speak · Keep holding after speaking for live mode</div>
+</div>
+
+<div id="ctx-menu">
+  <button id="ctx-reply">reply</button>
+  <button id="ctx-ask">?</button>
 </div>
 
 <script>
@@ -473,6 +733,23 @@ const INTERRUPT_RMS_THRESHOLD = 0.08
 const INTERRUPT_ONSET_CHUNKS  = 6
 const API                     = 'http://127.0.0.1:8743'
 
+// ── UI scale ────────────────────────────────────────────────────────────────────
+let uiScale = parseInt(localStorage.getItem('uiScale') || '100', 10)
+function applyScale() {
+  const f = uiScale / 100
+  // zoom scales body larger than viewport; compensate dimensions so rendered size = 100vw/vh
+  document.body.style.zoom   = f
+  document.body.style.width  = `calc(100vw / ${f})`
+  document.body.style.height = `calc(100vh / ${f})`
+  document.getElementById('scale-label').textContent = uiScale + '%'
+}
+function adjustScale(delta) {
+  uiScale = Math.min(150, Math.max(70, uiScale + delta))
+  localStorage.setItem('uiScale', uiScale)
+  applyScale()
+}
+applyScale()
+
 // ── state ──────────────────────────────────────────────────────────────────────
 const STATE = Object.freeze({ IDLE: 'IDLE', PTT_RECORDING: 'PTT_RECORDING',
                                PTT_PROCESSING: 'PTT_PROCESSING', LIVE_ACTIVE: 'LIVE_ACTIVE' })
@@ -480,8 +757,12 @@ let state            = STATE.IDLE
 let liveModeToken    = null
 let liveModeTimerId  = null   // setTimeout handle for VAD-driven live transition
 let pttCooldownUntil = 0
-let currentLang      = 'en'
+let currentLang      = 'ja'
+let translateTo      = 'en'
 let ttsMode          = 'kokoro'   // 'local' | 'kokoro' | 'voicevox'
+let sttModel         = 'qwen3-0.6b-4bit'
+let sttLoadAbortCtrl = null   // AbortController for in-flight /stt/load request
+let searchOnline     = false
 let liveTtsSampleRate = 24000     // updated from tts_start event
 let chatHistory      = []
 
@@ -505,17 +786,39 @@ async function loadSettings() {
     document.getElementById('system-prompt-en').value = s.system_prompt_en || ''
     document.getElementById('system-prompt-ja').value = s.system_prompt_ja || ''
     document.getElementById('system-prompt-zh').value = s.system_prompt_zh || ''
-    currentLang = s.language || 'en'
+    currentLang = s.language || 'ja'
+    translateTo = s.translate_to || 'en'
     ttsMode = (s.tts_mode === 'remote' ? 'kokoro' : s.tts_mode) || 'kokoro'
+    sttModel = s.stt_model || 'qwen3-0.6b-4bit'
+    searchOnline = !!s.search_online
+    updateOnlineUI()
+    updateTranslateToUI()
     document.getElementById('voicevox-speaker-input').value = s.voicevox_speaker ?? 1
     updateLangUI()
     updateTtsModeUI()
+    await loadSttModels()
     checkConfigWarning()
   } catch {}
 }
 
 function toggleConfig() {
   document.getElementById('config-bar').classList.toggle('open')
+}
+
+async function toggleOnline() {
+  searchOnline = !searchOnline
+  updateOnlineUI()
+  await fetch(`${API}/settings/search_online`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ enabled: searchOnline }),
+  }).catch(() => {})
+}
+
+function updateOnlineUI() {
+  const btn = document.getElementById('online-btn')
+  btn.textContent = searchOnline ? '🌐 Online' : '🌐 Offline'
+  btn.classList.toggle('active', searchOnline)
 }
 
 function setLang(lang) {
@@ -527,6 +830,17 @@ function updateLangUI() {
   document.getElementById('lang-en').classList.toggle('active', currentLang === 'en')
   document.getElementById('lang-ja').classList.toggle('active', currentLang === 'ja')
   document.getElementById('lang-zh').classList.toggle('active', currentLang === 'zh')
+}
+
+function setTranslateTo(lang) {
+  translateTo = lang
+  updateTranslateToUI()
+}
+
+function updateTranslateToUI() {
+  document.getElementById('trans-en').classList.toggle('active', translateTo === 'en')
+  document.getElementById('trans-ja').classList.toggle('active', translateTo === 'ja')
+  document.getElementById('trans-zh').classList.toggle('active', translateTo === 'zh')
 }
 
 function toggleTtsMode() {
@@ -544,7 +858,8 @@ function updateTtsModeUI() {
 }
 
 function checkConfigWarning() {
-  const empty = !document.getElementById('stt-input').value ||
+  const sttOk = sttModel !== 'remote' || !!document.getElementById('stt-input').value
+  const empty = !sttOk ||
                 !document.getElementById('llm-input').value ||
                 !document.getElementById('tts-input').value
   document.getElementById('config-warning').style.display = empty ? '' : 'none'
@@ -553,14 +868,99 @@ function checkConfigWarning() {
   }
 }
 
+async function loadSttModels() {
+  try {
+    const models = await fetch(`${API}/stt/models`).then(r => r.json())
+    const sel = document.getElementById('stt-model-select')
+    sel.innerHTML = ''
+    for (const m of models) {
+      const opt = document.createElement('option')
+      opt.value = m.key
+      opt.textContent = m.label + (m.loaded ? ' ✓' : '') + (!m.available && m.key !== 'remote' ? ' (unavailable)' : '')
+      opt.disabled = !m.available
+      sel.appendChild(opt)
+    }
+    sel.value = sttModel
+    updateSttEndpointRowVisibility()
+  } catch {}
+}
+
+function onSttModelChange() {
+  sttModel = document.getElementById('stt-model-select').value
+  updateSttEndpointRowVisibility()
+  checkConfigWarning()
+  document.getElementById('stt-load-status').textContent = ''
+  document.getElementById('stt-load-status').className = ''
+}
+
+function updateSttEndpointRowVisibility() {
+  document.getElementById('stt-endpoint-row').style.display = sttModel === 'remote' ? '' : 'none'
+}
+
+async function loadSttModel() {
+  const key = document.getElementById('stt-model-select').value
+  if (key === 'remote') return
+  const btn    = document.getElementById('stt-load-btn')
+  const status = document.getElementById('stt-load-status')
+
+  if (btn.classList.contains('loading')) {
+    // Cancel in-flight load
+    sttLoadAbortCtrl?.abort()
+    await fetch(`${API}/stt/load/cancel`, { method: 'POST' }).catch(() => {})
+    btn.textContent = 'Load'
+    btn.classList.remove('loading')
+    status.textContent = 'Cancelled'
+    status.className = ''
+    return
+  }
+
+  btn.textContent = 'Cancel'
+  btn.classList.add('loading')
+  status.textContent = 'Loading…'
+  status.className = ''
+  sttLoadAbortCtrl = new AbortController()
+  try {
+    const r = await fetch(`${API}/stt/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: key }),
+      signal: sttLoadAbortCtrl.signal,
+    })
+    const data = await r.json()
+    if (data.cancelled) {
+      status.textContent = 'Cancelled'
+      status.className = ''
+    } else if (data.ok) {
+      status.textContent = `✓ ${data.elapsed_ms}ms`
+      status.className = 'ok'
+      loadSttModels()  // refresh loaded state in select
+    } else {
+      status.textContent = data.error || 'Error'
+      status.className = 'err'
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      status.textContent = 'Error'
+      status.className = 'err'
+    }
+  } finally {
+    btn.textContent = 'Load'
+    btn.classList.remove('loading')
+    sttLoadAbortCtrl = null
+  }
+}
+
 async function saveEndpoints() {
   const s = {
     stt_endpoint:  document.getElementById('stt-input').value.trim(),
+    stt_model:     sttModel,
+    search_online: searchOnline,
     llm_endpoint:  document.getElementById('llm-input').value.trim(),
     tts_endpoint:  document.getElementById('tts-input').value.trim(),
     llm_model:     document.getElementById('model-input').value.trim(),
     llm_api_key:   document.getElementById('llm-key-input').value.trim(),
     language:      currentLang,
+    translate_to:  translateTo,
     tts_mode:         ttsMode,
     voicevox_speaker: parseInt(document.getElementById('voicevox-speaker-input').value, 10) || 1,
     voice_en:         'Ryan',
@@ -591,10 +991,23 @@ function setDot(key, ok) {
 }
 
 // ── chat ───────────────────────────────────────────────────────────────────────
-function appendUserMessage(text, source = 'text') {
+function appendErrorMessage(text) {
+  const wrap = document.createElement('div')
+  wrap.className = 'bubble-wrap assistant'
+  const bubble = document.createElement('div')
+  bubble.className = 'bubble error-bubble'
+  bubble.textContent = text
+  wrap.appendChild(bubble)
+  chatList.appendChild(wrap)
+  scrollBottom()
+}
+
+function appendUserMessage(text, source = 'text', audioBlob = null) {
+  collapseVoiceAudioRow(_lastVoiceBubbleWrap)  // flush previous user audio on every new message
+  _lastVoiceBubbleWrap = null
   const msg = { role: 'user', content: text, source, timestamp: Date.now() }
   chatHistory.push(msg)
-  renderBubble(msg)
+  renderBubble(msg, audioBlob)
 }
 
 function startAssistantBubble() {
@@ -621,24 +1034,96 @@ function updateAssistantBubble(id, text, done = false) {
     meta.className = 'bubble-meta'
     meta.textContent = fmtTime(Date.now())
     wrap.appendChild(meta)
+    finalizeBubbleWithChevron(id, text)
   }
   scrollBottom()
 }
 
-function renderBubble(msg) {
+let _lastVoiceBubbleWrap = null  // tracks most recent PTT bubble for auto-shrink
+
+function renderBubble(msg, audioBlob = null) {
   const wrap = document.createElement('div')
   wrap.className = `bubble-wrap ${msg.role}`
   const bubble = document.createElement('div')
   bubble.className = 'bubble'
-  bubble.textContent = msg.content
+
+  if (msg.source === 'voice' && audioBlob) {
+    // two-row voice bubble: audio player (top) + divider + transcript (bottom)
+    const audioRow = document.createElement('div')
+    audioRow.className = 'bubble-audio-row'
+
+    const playBtn = document.createElement('button')
+    playBtn.className = 'bubble-play-btn'
+    playBtn.textContent = '▶'
+    playBtn.title = 'Play recording'
+    audioRow.appendChild(playBtn)
+
+    const textDiv = document.createElement('div')
+    textDiv.className = 'bubble-transcript'
+    textDiv.textContent = msg.content
+
+    bubble.appendChild(audioRow)
+    bubble.appendChild(textDiv)
+
+    wrap._audioBlob = audioBlob
+    wrap._audioObjectUrl = URL.createObjectURL(audioBlob)
+    playBtn.addEventListener('click', () => playVoiceBubble(wrap))
+
+    _lastVoiceBubbleWrap = wrap
+  } else {
+    bubble.textContent = msg.content
+  }
+
   wrap.appendChild(bubble)
   const meta = document.createElement('div')
   meta.className = 'bubble-meta'
   if (msg.source === 'voice') meta.innerHTML = '<span class="mic-icon">🎙</span>'
-  meta.append(fmtTime(msg.timestamp))
+  const timeSpan = document.createElement('span')
+  timeSpan.className = 'bubble-time'
+  timeSpan.textContent = fmtTime(msg.timestamp)
+  meta.appendChild(timeSpan)
   wrap.appendChild(meta)
   chatList.appendChild(wrap)
   scrollBottom()
+}
+
+function collapseVoiceAudioRow(wrapEl) {
+  if (!wrapEl || !wrapEl.isConnected) return
+  const audioRow = wrapEl.querySelector('.bubble-audio-row')
+  if (!audioRow || audioRow.classList.contains('collapsed')) return
+  audioRow.classList.add('collapsed')
+  // revoke object URL after the CSS transition finishes
+  setTimeout(() => {
+    if (wrapEl._audioObjectUrl) {
+      URL.revokeObjectURL(wrapEl._audioObjectUrl)
+      delete wrapEl._audioObjectUrl
+    }
+  }, 400)
+}
+
+async function playVoiceBubble(wrapEl) {
+  // toggle off if already playing this bubble
+  if (pttAudioSrc) { stopPTTAudio(); return }
+  if (!wrapEl?._audioBlob) return
+  try {
+    const arrayBuf = await wrapEl._audioBlob.arrayBuffer()
+    const ctx = getAudioCtx()
+    const decoded = await ctx.decodeAudioData(arrayBuf)
+    const src = ctx.createBufferSource()
+    src.buffer = decoded
+    src.connect(ctx.destination)
+    pttAudioSrc = src
+    _ttsActiveBubbleWrap = wrapEl
+    setBubbleTtsStatus(wrapEl, 'playback')
+    src.start()
+    src.onended = () => {
+      pttAudioSrc = null
+      setBubbleTtsStatus(_ttsActiveBubbleWrap, null)
+      _ttsActiveBubbleWrap = null
+    }
+  } catch (e) {
+    console.error('voice playback error', e)
+  }
 }
 
 function fmtTime(ts) {
@@ -683,6 +1168,7 @@ async function streamLLMResponse(userText) {
       body: JSON.stringify({ message: userText, history: chatHistory.slice(-10), language: currentLang }),
       signal: llmAbortController.signal,
     })
+    if (!r.ok) throw new Error(`LLM error ${r.status}`)
     const reader = r.body.getReader()
     const dec = new TextDecoder()
     let buf = ''
@@ -703,8 +1189,9 @@ async function streamLLMResponse(userText) {
       }
     }
   } catch (e) {
+    document.getElementById(bubbleId)?.remove()
     if (e.name !== 'AbortError') throw e
-    // aborted — return whatever streamed so far (may be empty)
+    return null  // aborted before DONE — always undo the user prompt
   } finally {
     llmAbortController = null
   }
@@ -712,13 +1199,61 @@ async function streamLLMResponse(userText) {
   if (full) {
     updateAssistantBubble(bubbleId, full, true)
     chatHistory.push({ role: 'assistant', content: full, source: 'text', timestamp: Date.now() })
-  } else {
-    document.getElementById(bubbleId)?.remove()
   }
   return full
 }
 
 // ── text send ──────────────────────────────────────────────────────────────────
+async function translateInput() {
+  const text = textInput.value.trim()
+  if (!text) return
+  const btn = document.getElementById('translate-btn')
+  btn.disabled = true
+  btn.classList.add('translating')
+  textInput.disabled = true
+  const orig = btn.textContent
+  btn.textContent = '⇄'
+  try {
+    const r = await fetch(`${API}/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, target: currentLang }),
+    })
+    if (!r.ok) throw new Error(`${r.status}`)
+    const reader = r.body.getReader()
+    const dec = new TextDecoder()
+    let buf = '', result = '', firstToken = true
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop()
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const d = line.slice(6)
+        if (d === '[DONE]') break
+        try {
+          const token = JSON.parse(d).choices?.[0]?.delta?.content
+          if (token) {
+            if (firstToken) { textInput.value = ''; firstToken = false }
+            result += token
+            textInput.value = result
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.error('translate error', e)
+  } finally {
+    btn.textContent = orig
+    btn.disabled = false
+    btn.classList.remove('translating')
+    textInput.disabled = false
+    textInput.focus()
+  }
+}
+
 async function sendText() {
   const text = textInput.value.trim()
   if (!text) return
@@ -728,7 +1263,7 @@ async function sendText() {
   try {
     await streamLLMResponse(text)
   } catch (e) {
-    if (e.name !== 'AbortError') console.error('LLM error', e)
+    if (e.name !== 'AbortError') appendErrorMessage('Error: ' + (e.message || String(e)))
   } finally {
     setStopBtn(false)
     document.getElementById('send-btn').disabled = false
@@ -818,13 +1353,15 @@ function encodePcmToWav(chunks, sampleRate = 16000) {
 }
 
 async function uploadPcmChunks(chunks) {
-  const wav = encodePcmToWav(chunks)
-  const fd  = new FormData()
-  fd.append('audio', new Blob([wav], { type: 'audio/wav' }), 'recording.wav')
+  const wav  = encodePcmToWav(chunks)
+  const blob = new Blob([wav], { type: 'audio/wav' })
+  const fd   = new FormData()
+  fd.append('audio', blob, 'recording.wav')
   fd.append('language', currentLang)
   const r = await fetch(`${API}/stt`, { method: 'POST', body: fd })
   if (!r.ok) throw new Error(`STT error ${r.status}`)
-  return (await r.json()).transcript || ''
+  const transcript = (await r.json()).transcript || ''
+  return { transcript, blob }
 }
 
 // ── PTT audio playback ─────────────────────────────────────────────────────────
@@ -837,10 +1374,15 @@ function getAudioCtx() {
 let pttAudioSrc = null
 
 function stopPTTAudio() {
-  if (pttAudioSrc) { try { pttAudioSrc.stop() } catch {} ; pttAudioSrc = null }
+  if (pttAudioSrc) {
+    try { pttAudioSrc.stop() } catch {}
+    pttAudioSrc = null
+    setBubbleTtsStatus(_ttsActiveBubbleWrap, 'interrupted')
+    _ttsActiveBubbleWrap = null
+  }
 }
 
-async function fetchAndPlayTTS(text) {
+async function fetchAndPlayTTS(text, targetWrap = null) {
   const r = await fetch(`${API}/tts`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ text, language: currentLang }),
@@ -853,9 +1395,10 @@ async function fetchAndPlayTTS(text) {
   src.buffer = decoded
   src.connect(ctx.destination)
   pttAudioSrc = src
-  src.onended = () => { pttAudioSrc = null }
+  _ttsActiveBubbleWrap = targetWrap ?? chatList.querySelector('.bubble-wrap.assistant:last-child') ?? null
+  setBubbleTtsStatus(_ttsActiveBubbleWrap, 'playback')
   src.start()
-  return new Promise((res) => { src.onended = () => { pttAudioSrc = null; res() } })
+  return new Promise((res) => { src.onended = () => { pttAudioSrc = null; setBubbleTtsStatus(_ttsActiveBubbleWrap, null); _ttsActiveBubbleWrap = null; res() } })
 }
 
 // ── UI state helpers ───────────────────────────────────────────────────────────
@@ -885,19 +1428,36 @@ function isPTTEligible() {
   return true
 }
 
+function undoLastUserMessage() {
+  // Remove the last user entry from chatHistory
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].role === 'user') { chatHistory.splice(i, 1); break }
+  }
+  // Remove the last user bubble from DOM
+  const userBubbles = chatList.querySelectorAll('.bubble-wrap.user')
+  const last = userBubbles[userBubbles.length - 1]
+  if (last === _lastVoiceBubbleWrap) _lastVoiceBubbleWrap = null
+  last?.remove()
+}
+
 // ── processPTT ─────────────────────────────────────────────────────────────────
 async function processPTT(chunks) {
   try {
     if (!chunks || chunks.length === 0) return
-    const transcript = await uploadPcmChunks(chunks)
+    const { transcript, blob } = await uploadPcmChunks(chunks)
     if (state !== STATE.PTT_PROCESSING) return   // aborted
     if (!transcript.trim()) return
-    appendUserMessage(transcript, 'voice')
+    appendUserMessage(transcript, 'voice', blob)
     const assistantText = await streamLLMResponse(transcript)
-    if (state !== STATE.PTT_PROCESSING) return   // aborted mid-LLM
+    if (state !== STATE.PTT_PROCESSING) {
+      // null = aborted before LLM [DONE] → erase turn
+      // non-null = LLM finished, audio was interrupted → bubbles stay
+      if (assistantText === null) undoLastUserMessage()
+      return
+    }
     if (assistantText) await fetchAndPlayTTS(assistantText)
   } catch (e) {
-    console.error('PTT pipeline error', e)
+    if (e.name !== 'AbortError') appendErrorMessage('Error: ' + (e.message || String(e)))
   } finally {
     // only reset if we still own the state — an interrupt may have already moved it on
     if (state === STATE.PTT_PROCESSING) setState(STATE.IDLE)
@@ -951,8 +1511,127 @@ let liveWS            = null
 let liveQueuedSrcs    = []
 let livePlaybackGated = false  // true only while TTS is playing — gates binary audio
 let liveInterruptSent = false  // prevent duplicate interrupt messages per TTS turn
+let liveDecodingCount = 0      // pending decodeAudioData calls — prevents missed spacebar during async decode
 let interruptStreak   = 0      // consecutive above-threshold chunks during TTS
 let _liveTurnText     = ''     // accumulates assistant tokens for the current live turn
+let _lastInterruptTime = 0     // debounce: timestamp of last liveInterrupt() call
+
+let _ttsActiveBubbleWrap = null  // last assistant bubble-wrap during TTS
+let _liveLLMDone = false         // true once tts_start received — LLM [DONE] was reached
+
+function setBubbleTtsStatus(wrapEl, mode) {
+  if (!wrapEl) return
+  wrapEl.querySelector('.bubble-tts-status')?.remove()
+  if (!mode) return
+  let meta = wrapEl.querySelector('.bubble-meta')
+  if (!meta) {
+    meta = document.createElement('div')
+    meta.className = 'bubble-meta'
+    wrapEl.appendChild(meta)
+  }
+  const span = document.createElement('span')
+  span.className = 'bubble-tts-status'
+  span.textContent = mode === 'playback' ? '▶ playback' : '✕ interrupted'
+  if (mode === 'interrupted') {
+    span.classList.add('interrupted')
+    setTimeout(() => span.remove(), 800)
+  }
+  // user bubbles: insert before the timestamp (status appears to its left)
+  // assistant bubbles: insert before the chevron (status appears right of timestamp)
+  if (wrapEl.classList.contains('user')) {
+    const timeSpan = meta.querySelector('.bubble-time')
+    if (timeSpan) meta.insertBefore(span, timeSpan)
+    else meta.appendChild(span)
+  } else {
+    const chevron = meta.querySelector('.bubble-chevron')
+    if (chevron) meta.insertBefore(span, chevron)
+    else meta.appendChild(span)
+  }
+}
+
+// ── bubble translation ─────────────────────────────────────────────────────────
+const translationCache = new Map()  // bubbleId → translated text (in-memory, session only)
+
+function finalizeBubbleWithChevron(wrapId, text) {
+  const wrap = document.getElementById(wrapId)
+  if (!wrap) return
+  const bubble = wrap.querySelector('.bubble')
+  if (!bubble || bubble.querySelector('.bubble-translation')) return  // already finalized
+  bubble.dataset.text = text
+
+  // translation panel lives inside bubble (expands bubble height)
+  const panel = document.createElement('div')
+  panel.className = 'bubble-translation'
+  const inner = document.createElement('div')
+  inner.className = 'bubble-translation-inner'
+  panel.appendChild(inner)
+  bubble.appendChild(panel)
+
+  // chevron lives in .bubble-meta row, right-justified via margin-left: auto
+  let meta = wrap.querySelector('.bubble-meta')
+  if (!meta) {
+    meta = document.createElement('div')
+    meta.className = 'bubble-meta'
+    wrap.appendChild(meta)
+  }
+  const chevron = document.createElement('button')
+  chevron.className = 'bubble-chevron'
+  chevron.textContent = '▾'
+  chevron.title = 'Translate'
+  meta.appendChild(chevron)
+
+  chevron.addEventListener('click', () => expandTranslation(wrapId, chevron, panel, bubble.dataset.text))
+}
+
+async function expandTranslation(wrapId, chevron, panel, text) {
+  const isOpen = panel.classList.contains('open')
+  if (isOpen) {
+    panel.classList.remove('open')
+    chevron.classList.remove('open')
+    return
+  }
+  chevron.classList.add('open')
+  panel.classList.add('open')
+  const inner = panel.querySelector('.bubble-translation-inner')
+
+  if (translationCache.has(wrapId)) {
+    inner.textContent = translationCache.get(wrapId)
+    return
+  }
+
+  inner.textContent = '…'
+  try {
+    const r = await fetch(`${API}/translate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text }),
+    })
+    if (!r.ok) throw new Error(`${r.status}`)
+    const reader = r.body.getReader()
+    const dec = new TextDecoder()
+    let buf = '', full = ''
+    inner.textContent = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop()
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const d = line.slice(6)
+        if (d === '[DONE]') break
+        try {
+          const tok = JSON.parse(d).choices?.[0]?.delta?.content
+          if (tok) { full += tok; inner.textContent = full; scrollBottom() }
+        } catch {}
+      }
+    }
+    translationCache.set(wrapId, full)
+  } catch (e) {
+    inner.textContent = `Translation error: ${e.message}`
+  }
+}
 
 // preBuffer: PCM ArrayBuffer[] captured during PTT_RECORDING before live transition
 async function enterLiveMode(preBuffer = []) {
@@ -1034,8 +1713,13 @@ async function enterLiveMode(preBuffer = []) {
             audioBuffer = ctx.createBuffer(1, f32.length, liveTtsSampleRate)
             audioBuffer.copyToChannel(f32, 0)
           } else {
-            // full WAV blob — decode normally
-            audioBuffer = await ctx.decodeAudioData(e.data.slice(0))
+            // full WAV blob — decode normally (async; track so spacebar sees pending decode)
+            liveDecodingCount++
+            try {
+              audioBuffer = await ctx.decodeAudioData(e.data.slice(0))
+            } finally {
+              liveDecodingCount--
+            }
           }
           if (liveInterruptSent) return
           const node = ctx.createBufferSource()
@@ -1050,6 +1734,7 @@ async function enterLiveMode(preBuffer = []) {
       try {
         const msg = JSON.parse(e.data)
         if (msg.type === 'transcript' && msg.final) {
+          _liveLLMDone = false
           appendUserMessage(msg.text, 'voice')
           startAssistantBubble()
         } else if (msg.type === 'token') {
@@ -1066,18 +1751,51 @@ async function enterLiveMode(preBuffer = []) {
           livePlaybackGated = true
           liveInterruptSent = false
           interruptStreak = 0
+          _liveLLMDone = true
           if (msg.sample_rate) liveTtsSampleRate = msg.sample_rate
+          _ttsActiveBubbleWrap = chatList.querySelector('.bubble-wrap.assistant:last-child') || null
+          setBubbleTtsStatus(_ttsActiveBubbleWrap, 'playback')
         } else if (msg.type === 'tts_end') {
-          if (_liveTurnText)
-            chatHistory.push({ role: 'assistant', content: _liveTurnText, source: 'voice', timestamp: Date.now() })
+          if (_liveTurnText) {
+            const ts = Date.now()
+            chatHistory.push({ role: 'assistant', content: _liveTurnText, source: 'voice', timestamp: ts })
+            const lastAssistant = chatList.querySelector('.bubble-wrap.assistant:last-child')
+            if (lastAssistant) {
+              const meta = document.createElement('div')
+              meta.className = 'bubble-meta'
+              meta.textContent = fmtTime(ts)
+              lastAssistant.appendChild(meta)
+              finalizeBubbleWithChevron(lastAssistant.id, _liveTurnText)
+            }
+          }
           _liveTurnText = ''
           livePlaybackGated = false
           liveInterruptSent = false
           interruptStreak = 0
+          setBubbleTtsStatus(_ttsActiveBubbleWrap, null)
+          _ttsActiveBubbleWrap = null
         } else if (msg.type === 'interrupted') {
+          const llmWasDone = _liveLLMDone  // snapshot before resets
           livePlaybackGated = false
           liveInterruptSent = false
+          liveDecodingCount = 0
           interruptStreak = 0
+          _liveLLMDone = false
+          // ── interrupt decision tree ──────────────────────────────
+          // Audio already stopped by liveInterrupt() → cancelLivePlayback()
+          //
+          // Was LLM done? (tts_start received = [DONE] was reached)
+          //   NO  → erase turn: remove assistant bubble + undo user prompt
+          //   YES → audio-only interrupt: bubbles stay, show badge
+          // ────────────────────────────────────────────────────────
+          if (!llmWasDone) {
+            chatList.querySelector('.bubble-wrap.assistant:last-child')?.remove()
+            undoLastUserMessage()
+            _ttsActiveBubbleWrap = null
+          } else {
+            setBubbleTtsStatus(_ttsActiveBubbleWrap, 'interrupted')
+            _ttsActiveBubbleWrap = null
+          }
         } else if (msg.type === 'error') {
           console.error('Live error:', msg.message)
           appendUserMessage('[Live mode error: ' + msg.message + ']', 'voice')
@@ -1113,6 +1831,9 @@ function cancelLivePlayback() {
 }
 
 function liveInterrupt() {
+  const now = Date.now()
+  if (now - _lastInterruptTime < 500) return  // debounce — ignore rapid repeated presses
+  _lastInterruptTime = now
   if (liveInterruptSent) return
   cancelLivePlayback()
   liveInterruptSent = true
@@ -1124,7 +1845,11 @@ function cleanupLive() {
   console.log('[live] cleanupLive called from:'); console.trace()
   livePlaybackGated = false
   liveInterruptSent = false
+  liveDecodingCount = 0
   interruptStreak = 0
+  _liveLLMDone = false
+  setBubbleTtsStatus(_ttsActiveBubbleWrap, null)
+  _ttsActiveBubbleWrap = null
   cancelLivePlayback()
   // tear down shared capture
   if (captureWorklet) { captureWorklet.port.onmessage = null; captureWorklet.disconnect(); captureWorklet = null }
@@ -1192,13 +1917,92 @@ function cancelLiveModeTimer() {
   resetArc()
 }
 
+// ── delete latest block ────────────────────────────────────────────────────────
+function deleteLatestBlock() {
+  // Remove last user entry and everything after it in chatHistory
+  const idx = chatHistory.findLastIndex(m => m.role === 'user')
+  if (idx === -1) return
+  chatHistory.splice(idx)
+
+  // Remove last user bubble and all following siblings (assistant bubble, error bubble, etc.)
+  const lastUser = [...chatList.querySelectorAll('.bubble-wrap.user')].at(-1)
+  if (!lastUser) return
+  if (lastUser === _lastVoiceBubbleWrap) _lastVoiceBubbleWrap = null
+  let el = lastUser
+  while (el) { const next = el.nextElementSibling; el.remove(); el = next }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Backspace' && e.code !== 'Delete') return
+  const active = document.activeElement
+  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return
+  if (state !== STATE.IDLE) return
+  e.preventDefault()
+  deleteLatestBlock()
+})
+
+function blinkUserBubble() {
+  const bubble = [...chatList.querySelectorAll('.bubble-wrap.user')].at(-1)?.querySelector('.bubble')
+  if (!bubble) return
+  bubble.classList.remove('bubble-no-audio')
+  void bubble.offsetWidth  // restart animation if already running
+  bubble.classList.add('bubble-no-audio')
+  bubble.addEventListener('animationend', () => bubble.classList.remove('bubble-no-audio'), { once: true })
+}
+
+document.addEventListener('keydown', async (e) => {
+  const ARROWS = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp']
+  if (!ARROWS.includes(e.code)) return
+  const active = document.activeElement
+  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return
+  e.preventDefault()
+
+  const lastAssistant = () => [...chatList.querySelectorAll('.bubble-wrap.assistant')].at(-1)
+
+  // left/right only work when pipeline is fully idle (spacebar must flush any active audio first)
+  if (state !== STATE.IDLE || pttAudioSrc) return
+
+  if (e.code === 'ArrowRight') {
+    // play newest user message: voice blob → AudioContext, text → TTS
+    const lastUser = [...chatList.querySelectorAll('.bubble-wrap.user')].at(-1)
+    if (!lastUser) return
+    if (lastUser._audioBlob) {
+      playVoiceBubble(lastUser)
+    } else {
+      const text = lastUser.querySelector('.bubble-transcript')?.textContent.trim()
+               || lastUser.querySelector('.bubble')?.textContent.trim()
+      if (!text) return
+      fetchAndPlayTTS(text, lastUser).catch(err => { if (err.name !== 'AbortError') console.error(err) })
+    }
+
+  } else if (e.code === 'ArrowLeft') {
+    // replay last assistant response through TTS
+    const wrap = lastAssistant()
+    if (!wrap) return
+    const bubble = wrap.querySelector('.bubble')
+    const text = bubble?.dataset.text || bubble?.textContent.trim()
+    if (!text) return
+    try { await fetchAndPlayTTS(text) } catch (err) { if (err.name !== 'AbortError') console.error(err) }
+
+  } else if (e.code === 'ArrowDown') {
+    // expand translation on last assistant bubble
+    const chevron = lastAssistant()?.querySelector('.bubble-chevron')
+    if (chevron && !chevron.classList.contains('open')) chevron.click()
+
+  } else if (e.code === 'ArrowUp') {
+    // collapse translation on last assistant bubble
+    const chevron = lastAssistant()?.querySelector('.bubble-chevron')
+    if (chevron && chevron.classList.contains('open')) chevron.click()
+  }
+})
+
 // ── space bar state machine ────────────────────────────────────────────────────
 document.addEventListener('keydown', async (e) => {
   if (e.code !== 'Space') return
   if (e.repeat) return
   if (document.getElementById('config-bar').classList.contains('open')) return
   if (state === STATE.LIVE_ACTIVE) {
-    if (livePlaybackGated || liveQueuedSrcs.length > 0) {
+    if (livePlaybackGated || liveQueuedSrcs.length > 0 || liveDecodingCount > 0) {
       liveInterrupt()   // stop TTS, signal backend, stay in live mode
     } else {
       exitLiveMode()
@@ -1206,14 +2010,23 @@ document.addEventListener('keydown', async (e) => {
     return
   }
   if (state === STATE.PTT_PROCESSING) {
-    abortLLM()          // cancel in-flight LLM request
-    stopPTTAudio()      // cut TTS playback if already in that phase
+    // ── interrupt decision tree ──────────────────────────────────
+    // abortLLM()    → no-op if LLM already done; cancels stream if still generating
+    // stopPTTAudio() → no-op if audio not playing; stops audio + shows badge if playing
+    //
+    // Was LLM done? (processPTT checks assistantText after streamLLMResponse returns)
+    //   NO  (streamLLMResponse returns null) → processPTT calls undoLastUserMessage()
+    //   YES (audio was playing, stopPTTAudio fired badge) → bubbles stay
+    // ────────────────────────────────────────────────────────────
+    abortLLM()
+    stopPTTAudio()
     // set IDLE directly so processPTT's finally guard won't clobber the new recording state
     state = STATE.IDLE
     beginPTTRecording()
     return
   }
   if (state !== STATE.IDLE) return
+  if (pttAudioSrc) { stopPTTAudio(); return }  // stop arrow-key TTS replay
   if (!isPTTEligible()) return
 
   beginPTTRecording()
@@ -1236,6 +2049,69 @@ document.addEventListener('keyup', async (e) => {
   }
   // LIVE_ACTIVE exit handled on keydown (tap)
   // any other state: no-op
+})
+
+// ── text context menu ──────────────────────────────────────────────────────────
+const ctxMenu   = document.getElementById('ctx-menu')
+let _ctxSelection = ''
+
+function showCtxMenu(selectionRange, selected) {
+  _ctxSelection = selected
+  ctxMenu.classList.add('visible')  // must be visible to measure
+  const rect = selectionRange.getBoundingClientRect()
+  const mw   = ctxMenu.offsetWidth
+  const mh   = ctxMenu.offsetHeight
+  const gap  = 10  // space between caret tip and selection top
+  const pad  = 8
+  let x = rect.left + rect.width  / 2 - mw / 2
+  let y = rect.top  - mh - gap
+  // if too close to top, flip below the selection
+  if (y < pad) y = rect.bottom + gap
+  x = Math.max(pad, Math.min(x, window.innerWidth - mw - pad))
+  ctxMenu.style.left = x + 'px'
+  ctxMenu.style.top  = y + 'px'
+}
+
+function hideCtxMenu() {
+  ctxMenu.classList.remove('visible')
+  _ctxSelection = ''
+}
+
+document.addEventListener('contextmenu', (e) => {
+  const tag = e.target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return  // let native menu through
+  const sel = window.getSelection()
+  const selected = sel?.toString().trim()
+  if (!selected) return  // nothing selected — let native menu through
+  e.preventDefault()
+  showCtxMenu(sel.getRangeAt(0), selected)
+})
+
+document.addEventListener('pointerdown', (e) => {
+  if (!ctxMenu.contains(e.target)) hideCtxMenu()
+})
+
+document.addEventListener('scroll', hideCtxMenu, true)
+
+document.getElementById('ctx-reply').addEventListener('click', () => {
+  const quoted = `「${_ctxSelection}」`
+  textInput.value = quoted
+  textInput.focus()
+  // place cursor at end
+  textInput.selectionStart = textInput.selectionEnd = textInput.value.length
+  hideCtxMenu()
+})
+
+document.getElementById('ctx-ask').addEventListener('click', () => {
+  const prompt = `「${_ctxSelection}」とっ意味てすか`
+  hideCtxMenu()
+  if (state !== STATE.IDLE) return
+  textInput.value = ''
+  appendUserMessage(prompt, 'text')
+  document.getElementById('send-btn').disabled = true
+  streamLLMResponse(prompt)
+    .catch(err => { if (err.name !== 'AbortError') appendErrorMessage('Error: ' + err.message) })
+    .finally(() => { setStopBtn(false); document.getElementById('send-btn').disabled = false })
 })
 
 // ── init ───────────────────────────────────────────────────────────────────────
