@@ -4,13 +4,13 @@ const fs     = require('fs')
 const http   = require('http')
 const { spawn, execSync } = require('child_process')
 
-const ROOT         = path.join(__dirname, '..')
-const VENV_PYTHON  = path.join(ROOT, 'venv', 'bin', 'python')
+const ROOT          = path.join(__dirname, '..')
+const VENV_PYTHON   = path.join(ROOT, 'venv', 'bin', 'python')
 const SETTINGS_PATH = path.join(ROOT, 'data', 'settings.json')
-const BACKEND_PORT = 8743
-const HEALTH_URL   = `http://127.0.0.1:${BACKEND_PORT}/health`
+const BACKEND_PORT  = 8743
+const HEALTH_URL    = `http://127.0.0.1:${BACKEND_PORT}/health`
 
-let mainWindow = null
+let mainWindow  = null
 let backendProc = null
 
 // ── settings IPC ──────────────────────────────────────────────────────────────
@@ -67,15 +67,13 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
-  mainWindow.loadFile(path.join(__dirname, 'index.html'))
+  mainWindow.loadFile(path.join(ROOT, 'app', 'index.html'))
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
 // ── app lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  // Check venv
   if (!fs.existsSync(VENV_PYTHON)) {
-    // Show a minimal loading window while bootstrapping
     mainWindow = new BrowserWindow({ width: 500, height: 200, resizable: false,
       webPreferences: { contextIsolation: true } })
     mainWindow.loadURL(`data:text/html,<body style="font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#111;color:#fff">

@@ -2,9 +2,8 @@ import asyncio, json, os, subprocess, sys, tempfile, urllib.request
 from pathlib import Path
 from typing import AsyncGenerator
 
-# Ensure backend/ is on sys.path so local modules resolve when launched via
-# `python -m uvicorn backend.main:app` from the project root.
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to sys.path so `modules/` package is importable regardless of CWD.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import httpx
 import numpy as np
@@ -15,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from tts_mlx import mlx_tts_stream, AVAILABLE as MLX_AVAILABLE, SAMPLE_RATE as MLX_SAMPLE_RATE
-from stt_mlx import stt_manager, MODELS as STT_MODELS, AVAILABLE as STT_AVAILABLE, DEFAULT_MODEL as STT_DEFAULT_MODEL
+from modules.tts.tts_manager import mlx_tts_stream, MLX_AVAILABLE, MLX_SAMPLE_RATE, voicevox_tts as _voicevox_tts
+from modules.stt.stt_manager import stt_manager, MODELS as STT_MODELS, AVAILABLE as STT_AVAILABLE, DEFAULT_MODEL as STT_DEFAULT_MODEL
 
 # ── debug ──────────────────────────────────────────────────────────────────────
 DEBUG_RAW_SSE = False   # set True to print every raw SSE line from the LLM
@@ -352,30 +351,6 @@ async def chat_stream(body: ChatIn):
 class TTSIn(BaseModel):
     text: str
     language: str = "en"
-
-_voicevox_cancellable: bool | None = None  # None = untested, True/False = cached result
-
-async def _voicevox_tts(client: httpx.AsyncClient, text: str, speaker: int, endpoint: str) -> bytes:
-    global _voicevox_cancellable
-    base = endpoint.rstrip("/")
-    r1 = await client.post(f"{base}/audio_query", params={"text": text, "speaker": speaker})
-    r1.raise_for_status()
-    # prefer /cancellable_synthesis — kills synthesis subprocess on connection close (<50ms interrupt)
-    # requires VOICEVOX launched with --enable_cancellable_synthesis --init_processes 2
-    # falls back to /synthesis if endpoint returns 404
-    if _voicevox_cancellable is not False:
-        r2 = await client.post(f"{base}/cancellable_synthesis", params={"speaker": speaker}, json=r1.json())
-        if r2.status_code == 404:
-            _voicevox_cancellable = False
-            print("[voicevox] /cancellable_synthesis not available — falling back to /synthesis. "
-                  "Launch VOICEVOX with --enable_cancellable_synthesis for faster interrupts.", flush=True)
-        else:
-            r2.raise_for_status()
-            _voicevox_cancellable = True
-            return r2.content
-    r2 = await client.post(f"{base}/synthesis", params={"speaker": speaker}, json=r1.json())
-    r2.raise_for_status()
-    return r2.content
 
 @app.get("/tts/mlx-available")
 async def tts_mlx_available():

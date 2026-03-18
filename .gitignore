@@ -7,3 +7,12 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+
+# Downloaded model weights — too large for git
+modules/stt/models/
+modules/tts/models/
+modules/llm/models/
+
+# Compiled binaries
+modules/llm/bin/llama-server
+modules/tts/bin/
