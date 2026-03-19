@@ -1,0 +1,42 @@
+appId: com.private.onichat
+productName: OniChat
+
+directories:
+  output: dist/
+  buildResources: build/
+
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+  identity: null          # ad-hoc sign — no notarization, private distribution
+
+dmg:
+  title: "OniChat ${version}"
+  window:
+    width: 540
+    height: 380
+
+files:
+  - app/**
+  - backend/**
+  - electron/**
+  - modules/**
+  - scripts/**
+  - package.json
+  # mutable dirs — live in userData at runtime, not in bundle
+  - "!**/venv/**"
+  - "!**/data/**"
+  # downloaded at runtime by installer
+  - "!modules/tts/bin/**"
+  - "!modules/llm/bin/**"
+  - "!modules/stt/models/**"
+  - "!modules/llm/models/**"
+  # build artifacts
+  - "!**/node_modules/**"
+  - "!**/__pycache__/**"
+  - "!**/*.pyc"
+  - "!**/*.pyo"
+  - "!dist/**"
+
+asar: false   # required — Python source + shell scripts must be readable at runtime

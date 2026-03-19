@@ -1,4 +1,6 @@
 venv/
+dist/
+scripts/bin/
 node_modules/
 data/settings.json
 data/*.onnx
