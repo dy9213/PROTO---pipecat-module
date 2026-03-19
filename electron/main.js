@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path   = require('path')
 const fs     = require('fs')
 const http   = require('http')
-const { spawn, execSync } = require('child_process')
+const { spawn } = require('child_process')
 
 const ROOT          = path.join(__dirname, '..')
 const VENV_PYTHON   = path.join(ROOT, 'venv', 'bin', 'python')
@@ -12,6 +12,24 @@ const HEALTH_URL    = `http://127.0.0.1:${BACKEND_PORT}/health`
 
 let mainWindow  = null
 let backendProc = null
+
+// ── log ring buffer ────────────────────────────────────────────────────────────
+const LOG_MAX   = 500
+const logBuffer = []   // [{level, text}]
+
+function pushLog(level, raw) {
+  String(raw).split('\n').forEach(line => {
+    if (!line) return
+    const entry = { level, text: line }
+    logBuffer.push(entry)
+    if (logBuffer.length > LOG_MAX) logBuffer.shift()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('log', entry)
+    }
+  })
+}
+
+ipcMain.handle('get-log-history', () => [...logBuffer])
 
 // ── settings IPC ──────────────────────────────────────────────────────────────
 ipcMain.handle('get-settings', () => {
@@ -49,9 +67,10 @@ function startBackend() {
     '--port', String(BACKEND_PORT), '--host', '127.0.0.1'], {
     cwd: ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,   // new process group (PGID = PID) — lets us kill the whole tree
   })
-  backendProc.stdout.on('data', (d) => process.stdout.write(d))
-  backendProc.stderr.on('data', (d) => process.stderr.write(d))
+  backendProc.stdout.on('data', (d) => { process.stdout.write(d); pushLog('stdout', d) })
+  backendProc.stderr.on('data', (d) => { process.stderr.write(d); pushLog('stderr', d) })
   backendProc.on('exit', (code) => {
     if (code !== 0 && code !== null) console.error(`Backend exited with code ${code}`)
   })
@@ -67,7 +86,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
-  mainWindow.loadFile(path.join(ROOT, 'app', 'index.html'))
+  mainWindow.loadFile(path.join(ROOT, 'app', 'loader.html'))
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
@@ -100,9 +119,12 @@ app.on('window-all-closed', () => app.quit())
 
 app.on('before-quit', async () => {
   if (!backendProc) return
+  // 1. Ask the backend to flush cleanly (unload models, close sockets).
   try {
     await fetch(`http://127.0.0.1:${BACKEND_PORT}/shutdown`, { method: 'POST' })
   } catch {}
-  await new Promise((r) => setTimeout(r, 2000))
-  backendProc.kill()
+  // 2. Give it a moment, then kill the entire process group — uvicorn, llama-server,
+  //    and voicevox all share the same PGID so one signal takes down the whole tree.
+  await new Promise((r) => setTimeout(r, 1000))
+  try { process.kill(-backendProc.pid, 'SIGTERM') } catch {}
 })

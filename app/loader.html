@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OniChat — Launcher</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --card:      #161b22;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --green:     #3fb950;
+    --yellow:    #d29922;
+    --red:       #f85149;
+    --blue:      #58a6ff;
+    --accent:    var(--green);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 560px;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .header-icon  { font-size: 28px; line-height: 1; }
+  .header-title { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .header-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Section ── */
+  .section {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-child { border-bottom: none; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Memory bar ── */
+  .memory-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .memory-bar-wrap {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .memory-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+  .memory-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .pressure-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    border: 1px solid currentColor;
+  }
+  .pressure-badge.normal   { color: var(--green); }
+  .pressure-badge.warn     { color: var(--yellow); }
+  .pressure-badge.critical { color: var(--red); }
+
+  /* ── Process list ── */
+  .proc-list { display: flex; flex-direction: column; gap: 6px; }
+  .proc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.03);
+  }
+  .proc-name {
+    flex: 1;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .proc-mem {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    min-width: 48px;
+    text-align: right;
+  }
+  .proc-mini-bar-wrap {
+    width: 60px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .proc-mini-bar {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--muted);
+  }
+  .proc-badge {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    color: var(--yellow);
+    border: 1px solid var(--yellow);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ── Model selectors ── */
+  .model-rows { display: flex; flex-direction: column; gap: 10px; }
+  .model-row  { display: flex; align-items: center; gap: 10px; }
+  .model-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    width: 85px;
+    flex-shrink: 0;
+  }
+  .model-select {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .model-select:focus { border-color: var(--blue); }
+  .model-size {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    width: 52px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .model-size.zero { color: var(--border); }
+
+  /* ── Recommendation ── */
+  .recommendation {
+    background: rgba(210, 153, 34, 0.08);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 12px;
+    display: none;
+  }
+  .recommendation.visible { display: block; }
+  .rec-title { font-size: 11px; font-weight: 600; color: var(--yellow); margin-bottom: 6px; }
+  .rec-list  { display: flex; flex-direction: column; gap: 3px; }
+  .rec-item  { font-size: 11px; color: var(--muted); }
+  .rec-item span { color: var(--text); }
+
+  /* ── Footer / Launch ── */
+  .footer {
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .estimate { flex: 1; font-size: 12px; }
+  .estimate-needed { font-weight: 600; font-size: 14px; }
+  .estimate-needed.fits  { color: var(--green); }
+  .estimate-needed.tight { color: var(--yellow); }
+  .estimate-needed.over  { color: var(--red); }
+  .estimate-sub { color: var(--muted); margin-top: 2px; font-size: 11px; }
+
+  .launch-btn {
+    background: var(--green);
+    color: #0d1117;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 28px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .launch-btn:hover   { opacity: 0.88; }
+  .launch-btn:active  { transform: scale(0.97); }
+  .launch-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+  }
+  @keyframes launch-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.55; }
+  }
+  .launch-btn.warming {
+    animation: launch-pulse 1.1s ease-in-out infinite;
+    cursor: wait;
+  }
+
+  /* ── Loading / error states ── */
+  .loading-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 8px 0;
+  }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg { font-size: 12px; color: var(--red); padding: 8px 0; }
+
+  /* ── Install phase ── */
+  .install-summary {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .install-summary strong { color: var(--text); font-weight: 600; }
+
+  .install-accordion {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .install-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.02);
+    transition: background 0.15s;
+  }
+  .install-accordion-header:hover { background: rgba(255,255,255,0.05); }
+  .install-accordion-chevron {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .install-accordion-chevron.open { transform: rotate(180deg); }
+  .install-accordion-body {
+    display: none;
+    border-top: 1px solid var(--border);
+  }
+  .install-accordion-body.open { display: block; }
+  .install-list { display: flex; flex-direction: column; }
+  .install-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .install-item:last-child { border-bottom: none; }
+  .install-icon { font-size: 14px; flex-shrink: 0; width: 18px; text-align: center; color: var(--muted); }
+  .install-info { flex: 1; }
+  .install-name { font-size: 12px; font-weight: 600; font-family: monospace; }
+  .install-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .install-size { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+
+  .progress-wrap { margin-top: 16px; }
+  .progress-bar-outer {
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar-inner {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--blue);
+    transition: width 0.3s ease;
+  }
+  .progress-label { font-size: 11px; color: var(--muted); }
+
+  /* ── Console panel ── */
+  #console-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-family: monospace;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    z-index: 100;
+    user-select: none;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #console-toggle:hover { color: var(--text); border-color: var(--muted); }
+  #console-toggle.active { color: var(--green); border-color: var(--green); }
+
+  #console-panel {
+    display: none;
+    position: fixed;
+    bottom: 48px;
+    right: 16px;
+    width: 620px;
+    max-width: calc(100vw - 32px);
+    height: 280px;
+    background: #0a0e13;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 99;
+    flex-direction: column;
+  }
+  #console-panel.open { display: flex; }
+  #console-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #console-toolbar span { font-size: 11px; color: var(--muted); flex: 1; font-family: monospace; }
+  #console-clear {
+    font-size: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    font-family: monospace;
+  }
+  #console-clear:hover { color: var(--text); }
+  #console-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: "SF Mono", "Fira Mono", monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-line.stdout { color: #c9d1d9; }
+  .log-line.stderr { color: #f0883e; }
+</style>
+</head>
+<body>
+
+<!-- Console toggle button -->
+<button id="console-toggle" onclick="toggleConsole()">⌨ log</button>
+
+<!-- Console panel -->
+<div id="console-panel">
+  <div id="console-toolbar">
+    <span>backend console</span>
+    <button id="console-clear" onclick="clearConsole()">clear</button>
+  </div>
+  <div id="console-output"></div>
+</div>
+
+<div class="card">
+
+  <!-- Header (always visible) -->
+  <div class="header">
+    <div class="header-icon">🍙</div>
+    <div>
+      <div class="header-title">OniChat</div>
+      <div class="header-sub" id="header-sub">Checking installation…</div>
+    </div>
+  </div>
+
+  <!-- ══ PHASE: install check / install ══ -->
+  <div id="phase-install">
+
+    <!-- Checking spinner -->
+    <div class="section" id="sec-checking">
+      <div class="loading-row">
+        <div class="spinner"></div>Checking installation…
+      </div>
+    </div>
+
+    <!-- Needs install -->
+    <div class="section" id="sec-needs-install" style="display:none">
+      <div class="section-title">Installation Required</div>
+      <div class="install-summary" id="install-summary"></div>
+      <div class="install-accordion">
+        <div class="install-accordion-header" id="accordion-header" onclick="toggleAccordion()">
+          <span class="install-accordion-chevron" id="accordion-chevron">▾</span>
+          <span id="accordion-label">Show packages</span>
+        </div>
+        <div class="install-accordion-body" id="accordion-body">
+          <div class="install-list" id="install-list"></div>
+        </div>
+      </div>
+      <div id="install-progress" style="display:none" class="progress-wrap">
+        <div class="progress-bar-outer">
+          <div class="progress-bar-inner" id="prog-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-label" id="prog-msg">Starting…</div>
+      </div>
+      <div class="error-msg" id="install-error" style="display:none"></div>
+    </div>
+
+    <div class="footer" id="footer-install" style="display:none">
+      <div class="estimate">
+        <div class="estimate-needed fits">One Time Setup</div>
+        <div class="estimate-sub">Requires internet connection</div>
+      </div>
+      <button class="launch-btn" style="background:transparent;color:var(--muted);border:1px solid var(--border);margin-right:8px"
+              id="skip-btn">Skip</button>
+      <button class="launch-btn" id="install-btn">Install</button>
+    </div>
+
+  </div>
+
+  <!-- ══ PHASE: system check + model selection ══ -->
+  <div id="phase-main" style="display:none">
+
+    <!-- Models -->
+    <div class="section">
+      <div class="section-title">Model Selection</div>
+      <p style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+        This second step is to install the <strong style="color:var(--text)">AI Models</strong>. These are the recommended models based on your system specification.
+      </p>
+      <div class="model-rows">
+        <div class="model-row">
+          <div class="model-label">STT (Ears)</div>
+          <select class="model-select" id="sel-stt"></select>
+          <div class="model-size" id="size-stt">—</div>
+        </div>
+        <div class="model-row">
+          <div class="model-label">LLM (Brain)</div>
+          <select class="model-select" id="sel-llm"></select>
+          <div class="model-size" id="size-llm">—</div>
+        </div>
+        <div class="model-row">
+          <div class="model-label">TTS (Mouth)</div>
+          <select class="model-select" id="sel-tts"></select>
+          <div class="model-size" id="size-tts">—</div>
+        </div>
+        <div class="model-row" style="opacity:0.5">
+          <div class="model-label">Overhead</div>
+          <div style="flex:1;font-size:12px;color:var(--muted);padding:6px 10px;border:1px solid transparent">KV cache · compute buffers</div>
+          <div class="model-size" id="size-overhead">—</div>
+        </div>
+      </div>
+      <div id="llm-downgrade-notice" style="display:none;margin-top:10px;font-size:11px;color:var(--yellow);padding:8px 10px;background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.3);border-radius:6px">
+        ↓ Auto-selected a smaller LLM — not enough free memory for 9B
+      </div>
+    </div>
+
+    <!-- System -->
+    <div class="section" id="section-system">
+      <div class="section-title">System Memory</div>
+      <div id="system-loading" class="loading-row">
+        <div class="spinner"></div>Scanning system…
+      </div>
+      <div id="system-content" style="display:none">
+        <div class="memory-row">
+          <div class="memory-bar-wrap">
+            <div class="memory-bar-fill" id="mem-bar" style="width:0%"></div>
+          </div>
+          <div class="memory-label" id="mem-label">— GB</div>
+          <div class="pressure-badge" id="pressure-badge">—</div>
+        </div>
+        <div class="recommendation" id="recommendation" style="margin-top:12px">
+          <div class="rec-title">⚠ Consider closing these apps to free memory</div>
+          <div class="rec-list" id="rec-list"></div>
+        </div>
+        <div class="install-accordion" style="margin-top:14px">
+          <div class="install-accordion-header" id="procs-accordion-header" onclick="toggleProcsAccordion()">
+            <span class="install-accordion-chevron" id="procs-accordion-chevron">▾</span>
+            <span id="procs-accordion-label">Top Processes (Memory Use)</span>
+          </div>
+          <div class="install-accordion-body" id="procs-accordion-body">
+            <div class="proc-list" id="proc-list" style="padding:8px 10px;gap:6px;display:flex;flex-direction:column"></div>
+          </div>
+        </div>
+      </div>
+      <div id="system-error" class="error-msg" style="display:none"></div>
+    </div>
+
+    <!-- Download progress -->
+    <div id="download-area" style="display:none" class="section">
+      <div class="section-title">Downloading</div>
+      <div id="download-rows" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="estimate">
+        <div class="estimate-needed" id="est-needed">— GB</div>
+        <div class="estimate-sub" id="est-sub">loading…</div>
+      </div>
+      <button class="launch-btn" id="launch-btn" disabled>Launch</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8743'
+const OS_OVERHEAD_GB = 0
+
+let _sysInfo   = null
+let _settings  = null
+let _presence  = { stt: {}, tts: {}, llm: {} }  // key → bool (downloaded)
+
+// ── Install check ─────────────────────────────────────────────────────────────
+async function checkInstall() {
+  let check
+  try {
+    check = await fetch(`${API}/system/install-check`).then(r => r.json())
+  } catch {
+    // backend unreachable — skip to main (system section will show the error)
+    enterMainPhase()
+    return
+  }
+
+  const missing = []
+  if (!check.llama_server) {
+    missing.push({
+      key:        'llama_server',
+      name:       'llama-server',
+      desc:       'Local LLM inference engine for Apple Silicon (llama.cpp)',
+      size:       '~35 MB',
+      installUrl: '/system/install',
+    })
+  }
+  // voicevox (~1.7 GB, includes weights) is handled in model selection, not here
+  _presence.tts['voicevox'] = !!check.voicevox_engine
+
+  if (missing.length === 0) {
+    enterMainPhase()
+    return
+  }
+
+  // Show install screen
+  document.getElementById('sec-checking').style.display = 'none'
+  document.getElementById('sec-needs-install').style.display = 'block'
+  document.getElementById('footer-install').style.display = 'flex'
+  document.getElementById('header-sub').textContent = 'Japanese Conversation Partner'
+
+  renderInstallList(missing)
+
+  document.getElementById('skip-btn').addEventListener('click', () => enterMainPhase())
+  document.getElementById('install-btn').addEventListener('click', () => doInstall(missing))
+}
+
+function renderInstallList(missing) {
+  // Summary
+  const totalMB = missing.reduce((acc, m) => acc + parseInt(m.size) || 0, 0)
+  const names   = missing.map(m => `<strong>${esc(m.name)}</strong>`).join(' and ')
+  document.getElementById('install-summary').innerHTML =
+    `OniChat needs to download components to enable the chat function. This first step is to install the <strong>AI Engines</strong>.`
+  // Accordion label
+  const n = missing.length
+  document.getElementById('accordion-label').textContent =
+    `${n} package${n > 1 ? 's' : ''} — ${missing.map(m => m.size).join(', ')}`
+
+  // Package rows
+  const list = document.getElementById('install-list')
+  list.innerHTML = ''
+  missing.forEach(m => {
+    const row = document.createElement('div')
+    row.className = 'install-item'
+    row.innerHTML = `
+      <div class="install-icon">⬇</div>
+      <div class="install-info">
+        <div class="install-name">${esc(m.name)}</div>
+        <div class="install-desc">${esc(m.desc)}</div>
+      </div>
+      <div class="install-size">${esc(m.size)}</div>
+    `
+    list.appendChild(row)
+  })
+}
+
+function toggleProcsAccordion() {
+  const body    = document.getElementById('procs-accordion-body')
+  const chevron = document.getElementById('procs-accordion-chevron')
+  const isOpen  = body.classList.toggle('open')
+  chevron.classList.toggle('open', isOpen)
+}
+
+function toggleAccordion() {
+  const body    = document.getElementById('accordion-body')
+  const chevron = document.getElementById('accordion-chevron')
+  const isOpen  = body.classList.toggle('open')
+  chevron.classList.toggle('open', isOpen)
+  document.getElementById('accordion-label').textContent = isOpen
+    ? document.getElementById('accordion-label').textContent.replace('Show', 'Hide')
+    : document.getElementById('accordion-label').textContent.replace('Hide', 'Show')
+}
+
+async function doInstall(missing) {
+  const btn    = document.getElementById('install-btn')
+  const skipBtn = document.getElementById('skip-btn')
+  const errEl  = document.getElementById('install-error')
+  btn.disabled     = true
+  skipBtn.disabled = true
+  btn.textContent  = 'Installing…'
+  document.getElementById('install-progress').style.display = 'block'
+  errEl.style.display = 'none'
+
+  for (const m of missing) {
+    document.getElementById('prog-msg').textContent = `Installing ${m.name}…`
+    document.getElementById('prog-fill').style.width = '0%'
+    try {
+      await installComponent(m)
+    } catch (err) {
+      errEl.style.display = 'block'
+      errEl.textContent   = `Failed to install ${m.name}: ${err}`
+      btn.disabled        = false
+      skipBtn.disabled    = false
+      btn.textContent     = 'Retry'
+      return
+    }
+  }
+
+  setTimeout(() => enterMainPhase(), 600)
+}
+
+function installComponent(m) {
+  return new Promise((resolve, reject) => {
+    const es = new EventSource(`${API}${m.installUrl}`)
+    es.onmessage = (e) => {
+      const data = JSON.parse(e.data)
+      if (data.error) { es.close(); reject(data.error); return }
+      document.getElementById('prog-fill').style.width = `${data.pct}%`
+      document.getElementById('prog-msg').textContent  = data.msg
+      if (data.pct === 100) { es.close(); resolve() }
+    }
+    es.onerror = () => { es.close(); reject('Connection lost') }
+  })
+}
+
+function enterMainPhase() {
+  document.getElementById('phase-install').style.display = 'none'
+  document.getElementById('phase-main').style.display    = 'block'
+  document.getElementById('header-sub').textContent      = 'Japanese Conversation Partner'
+  init()
+}
+
+// ── System info + model selection ─────────────────────────────────────────────
+async function init() {
+  const [sysRes, settRes, sttRes, llmRes] = await Promise.allSettled([
+    fetch(`${API}/system/info`).then(r => r.json()),
+    fetch(`${API}/settings`).then(r => r.json()),
+    fetch(`${API}/stt/models`).then(r => r.json()),
+    fetch(`${API}/llm/models`).then(r => r.json()),
+  ])
+
+  if (settRes.status === 'fulfilled') _settings = settRes.value
+
+  // Build presence map
+  if (sttRes.status === 'fulfilled') {
+    sttRes.value.forEach(m => { _presence.stt[m.key] = m.present ?? (m.backend === 'remote') })
+  }
+  if (llmRes.status === 'fulfilled') {
+    llmRes.value.forEach(m => { _presence.llm[m.key] = m.present ?? (m.key === 'remote') })
+  }
+  _presence.llm['remote'] = true
+
+  if (sysRes.status === 'rejected' || sysRes.value?.error) {
+    document.getElementById('system-loading').style.display = 'none'
+    const errEl = document.getElementById('system-error')
+    errEl.style.display = 'block'
+    errEl.textContent   = sysRes.value?.error || 'Could not reach backend. Is it running?'
+    enableLaunch()
+    return
+  }
+
+  _sysInfo = sysRes.value
+  renderSystem(_sysInfo)
+  populateSelects(_sysInfo.catalog)
+  restoreSelections(_settings)
+  updateEstimate()
+  updateButtonState()
+}
+
+// ── Memory section ────────────────────────────────────────────────────────────
+function renderSystem(info) {
+  document.getElementById('system-loading').style.display = 'none'
+  document.getElementById('system-content').style.display = 'block'
+
+  const { total_gb, used_gb, pressure } = info.memory
+  const pct = Math.round((used_gb / total_gb) * 100)
+
+  const pressureColor = { normal: '#3fb950', warn: '#d29922', critical: '#f85149' }
+  const color = pressureColor[pressure] || '#8b949e'
+  document.documentElement.style.setProperty('--accent', color)
+
+  const bar = document.getElementById('mem-bar')
+  bar.style.width      = `${pct}%`
+  bar.style.background = color
+
+  document.getElementById('mem-label').textContent = `${used_gb} / ${total_gb} GB`
+
+  const badge = document.getElementById('pressure-badge')
+  badge.textContent = pressure
+  badge.className   = `pressure-badge ${pressure}`
+
+  const list   = document.getElementById('proc-list')
+  const maxMem = info.processes[0]?.mem_gb || 1
+  info.processes.forEach(p => {
+    const row    = document.createElement('div')
+    row.className = 'proc-row'
+    const barPct  = Math.min(100, Math.round((p.mem_gb / maxMem) * 100))
+    const badge   = p.mem_gb >= 0.5 ? '<div class="proc-badge">consider closing</div>' : ''
+    row.innerHTML = `
+      <div class="proc-name">${esc(p.name)}</div>
+      <div class="proc-mini-bar-wrap">
+        <div class="proc-mini-bar" style="width:${barPct}%"></div>
+      </div>
+      <div class="proc-mem">${p.mem_gb.toFixed(1)} GB</div>
+      ${badge}
+    `
+    list.appendChild(row)
+  })
+}
+
+// ── Model selects ─────────────────────────────────────────────────────────────
+function populate(id, models, useFileGb = false, presenceMap = null) {
+  const sel = document.getElementById(id)
+  sel.innerHTML = ''
+  models.forEach(m => {
+    const opt      = document.createElement('option')
+    const size     = useFileGb ? (m.file_gb || 0) : (m.size_gb || 0)
+    const present  = presenceMap ? (presenceMap[m.key] ?? false) : null
+    const check    = present === true ? '✓ ' : (present === false ? '↓ ' : '')
+    opt.value       = m.key
+    opt.textContent = check + m.label + (size > 0 ? ` — ${size} GB` : '')
+    sel.appendChild(opt)
+  })
+}
+
+function repopulatePresence() {
+  // Re-render dropdowns in-place to reflect updated presence after download
+  if (!_sysInfo) return
+  const c = _sysInfo.catalog
+  populate('sel-stt', c.stt, false, _presence.stt)
+  populate('sel-tts', c.tts, true,  _presence.tts)
+  populate('sel-llm', c.llm, true,  _presence.llm)
+}
+
+function populateSelects(catalog) {
+  populate('sel-stt', catalog.stt, false, _presence.stt)
+  populate('sel-tts', catalog.tts, true,  _presence.tts)
+  populate('sel-llm', catalog.llm, true,  _presence.llm)
+
+  document.getElementById('sel-stt').addEventListener('change', () => { updateEstimate(); updateButtonState() })
+  document.getElementById('sel-tts').addEventListener('change', () => { updateEstimate(); updateButtonState() })
+  document.getElementById('sel-llm').addEventListener('change', () => {
+    document.getElementById('llm-downgrade-notice').style.display = 'none'
+    updateEstimate()
+    updateButtonState()
+  })
+}
+
+const DEFAULTS = { stt: 'qwen3-1.7b-4bit', tts: 'voicevox', llm: 'remote' }
+const LLM_PREFERRED = 'qwen3.5-9b-q4km'
+const LLM_FALLBACKS = ['qwen3.5-4b-q4km', 'qwen3.5-2b-q4km', 'remote']
+
+function smartLlmDefault(catalog, availGb) {
+  const priority = [LLM_PREFERRED, ...LLM_FALLBACKS]
+  for (const key of priority) {
+    const entry = catalog.llm.find(m => m.key === key)
+    if (!entry) continue
+    if (entry.size_gb === 0 || entry.size_gb + OS_OVERHEAD_GB <= availGb) return key
+  }
+  return 'remote'
+}
+
+function restoreSelections(settings) {
+  const sttSel = document.getElementById('sel-stt')
+  const ttsSel = document.getElementById('sel-tts')
+  const llmSel = document.getElementById('sel-llm')
+
+  // STT — saved value or default
+  const sttKey = settings?.stt_model || DEFAULTS.stt
+  if ([...sttSel.options].find(o => o.value === sttKey)) sttSel.value = sttKey
+
+  // TTS — saved value or default
+  const ttsMap = { voicevox: 'voicevox', kokoro: 'kokoro', remote: 'kokoro' }
+  const ttsKey = ttsMap[settings?.tts_mode] || DEFAULTS.tts
+  if ([...ttsSel.options].find(o => o.value === ttsKey)) ttsSel.value = ttsKey
+
+  // LLM — saved value if it matches a catalog entry, else smart default
+  const savedLlm  = settings?.llm_model || ''
+  const llmMatch  = [...llmSel.options].find(o => o.value === savedLlm)
+  if (llmMatch) {
+    llmSel.value = savedLlm
+  } else {
+    const avail   = _sysInfo?.memory?.available_gb || 0
+    const chosen  = smartLlmDefault(_sysInfo.catalog, avail)
+    llmSel.value  = chosen
+    if (chosen !== LLM_PREFERRED && chosen !== 'remote') {
+      document.getElementById('llm-downgrade-notice').style.display = 'block'
+    }
+  }
+}
+
+// ── Estimate + recommendation ─────────────────────────────────────────────────
+function updateEstimate() {
+  const catalog = _sysInfo?.catalog
+  if (!catalog) return
+
+  const sttKey = document.getElementById('sel-stt').value
+  const ttsKey = document.getElementById('sel-tts').value
+  const llmKey = document.getElementById('sel-llm').value
+
+  const sttEntry = catalog.stt.find(m => m.key === sttKey)
+  const ttsEntry = catalog.tts.find(m => m.key === ttsKey)
+  const llmEntry = catalog.llm.find(m => m.key === llmKey)
+
+  const sttGB     = sttEntry?.size_gb || 0
+  const ttsGB     = ttsEntry?.size_gb || 0
+  const llmGB     = llmEntry?.size_gb || 0
+  const ttsFileGB = ttsEntry?.file_gb || 0
+  const llmFileGB = llmEntry?.file_gb || 0
+
+  // Size labels match what the dropdown shows: file_gb for TTS/LLM, size_gb for STT
+  updateSizeLabel('size-stt', sttGB)
+  updateSizeLabel('size-tts', ttsFileGB || ttsGB)
+  updateSizeLabel('size-llm', llmFileGB)
+
+  // Overhead = LLM runtime delta (KV cache + compute buffers)
+  const llmOverhead = llmGB - llmFileGB
+  const overhead    = llmOverhead + OS_OVERHEAD_GB
+  updateSizeLabel('size-overhead', overhead)
+
+  const total   = sttGB + ttsGB + llmGB
+  const needed  = total + OS_OVERHEAD_GB
+  const avail   = _sysInfo?.memory?.available_gb || 0
+  const deficit = needed - avail
+
+  const neededEl = document.getElementById('est-needed')
+  const subEl    = document.getElementById('est-sub')
+  neededEl.textContent = `${total.toFixed(1)} GB models`
+
+  const remaining = avail - total   // free memory after models load
+  const launchBtn = document.getElementById('launch-btn')
+
+  if (total === 0) {
+    neededEl.className  = 'estimate-needed fits'
+    subEl.textContent   = `${avail.toFixed(1)} GB available — remote only, no local models`
+    launchBtn.disabled  = false
+  } else if (remaining > 1) {
+    neededEl.className  = 'estimate-needed fits'
+    subEl.textContent   = `${avail.toFixed(1)} GB available — fits ✓`
+    launchBtn.disabled  = false
+  } else if (remaining > 0) {
+    neededEl.className  = 'estimate-needed tight'
+    subEl.textContent   = `${avail.toFixed(1)} GB available — close fit, consider closing apps`
+    launchBtn.disabled  = false
+  } else {
+    neededEl.className  = 'estimate-needed over'
+    subEl.textContent   = `${avail.toFixed(1)} GB available — out of memory, select smaller models`
+    launchBtn.disabled  = true
+  }
+
+  renderRecommendation(remaining)
+}
+
+function updateSizeLabel(id, gb) {
+  const el = document.getElementById(id)
+  if (gb === 0) {
+    el.textContent = '—'
+    el.className   = 'model-size zero'
+  } else {
+    el.textContent = `${gb} GB`
+    el.className   = 'model-size'
+  }
+}
+
+function renderRecommendation(remaining) {
+  const rec     = document.getElementById('recommendation')
+  const recList = document.getElementById('rec-list')
+  recList.innerHTML = ''
+
+  if (remaining > 1 || !_sysInfo?.processes?.length) {
+    rec.classList.remove('visible')
+    return
+  }
+
+  const needed  = remaining < 0 ? -remaining + 0.5 : 1 - remaining + 0.5
+  let freed = 0
+  const suggestions = []
+  for (const p of [..._sysInfo.processes].sort((a, b) => b.mem_gb - a.mem_gb)) {
+    if (freed >= needed) break
+    if (p.mem_gb >= 0.3) { suggestions.push(p); freed += p.mem_gb }
+  }
+
+  if (!suggestions.length) { rec.classList.remove('visible'); return }
+
+  suggestions.forEach(p => {
+    const item = document.createElement('div')
+    item.className = 'rec-item'
+    item.innerHTML = `→ Close <span>${esc(p.name)}</span> (frees ~${p.mem_gb.toFixed(1)} GB)`
+    recList.appendChild(item)
+  })
+
+  rec.classList.add('visible')
+}
+
+// ── Launch ────────────────────────────────────────────────────────────────────
+function enableLaunch() {
+  document.getElementById('launch-btn').disabled = false
+}
+
+// ── Download needed? ──────────────────────────────────────────────────────────
+function getNeededDownloads() {
+  const sttKey = document.getElementById('sel-stt').value
+  const ttsKey = document.getElementById('sel-tts').value
+  const llmKey = document.getElementById('sel-llm').value
+  const needed = []
+  if (sttKey !== 'remote' && _presence.stt[sttKey] === false)
+    needed.push({ type: 'STT', key: sttKey, url: `/stt/download/${sttKey}`,
+                  label: document.getElementById('sel-stt').selectedOptions[0]?.text.replace(/^[✓↓] /, '') })
+  if (ttsKey === 'voicevox' && _presence.tts['voicevox'] === false)
+    needed.push({ type: 'TTS', key: 'voicevox', url: '/system/voicevox-install',
+                  label: document.getElementById('sel-tts').selectedOptions[0]?.text.replace(/^[✓↓] /, '') })
+  if (llmKey !== 'remote' && _presence.llm[llmKey] === false)
+    needed.push({ type: 'LLM', key: llmKey, url: `/llm/download/${llmKey}`,
+                  label: document.getElementById('sel-llm').selectedOptions[0]?.text.replace(/^[✓↓] /, '') })
+  return needed
+}
+
+function updateButtonState() {
+  const btn     = document.getElementById('launch-btn')
+  if (btn.disabled && btn.textContent !== 'Launch' && btn.textContent !== 'Download') return  // mid-action
+  const needed  = getNeededDownloads()
+  btn.textContent = needed.length > 0 ? 'Download' : 'Launch'
+}
+
+// ── Download flow ─────────────────────────────────────────────────────────────
+function makeDownloadRow(item) {
+  const div = document.createElement('div')
+  div.id = `dl-row-${item.key}`
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+      <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">${esc(item.type)}</span>
+      <span style="font-size:11px;color:var(--muted)" id="dl-msg-${esc(item.key)}">Waiting…</span>
+    </div>
+    <div style="font-size:12px;color:var(--text);margin-bottom:6px">${esc(item.label)}</div>
+    <div class="progress-bar-outer">
+      <div class="progress-bar-inner" id="dl-fill-${esc(item.key)}" style="width:0%"></div>
+    </div>
+  `
+  return div
+}
+
+async function doDownloads(needed) {
+  const btn  = document.getElementById('launch-btn')
+  const area = document.getElementById('download-area')
+  const rows = document.getElementById('download-rows')
+  rows.innerHTML = ''
+  needed.forEach(item => rows.appendChild(makeDownloadRow(item)))
+  area.style.display = 'block'
+  btn.disabled    = true
+  btn.textContent = 'Downloading…'
+
+  for (const item of needed) {
+    const fillEl = document.getElementById(`dl-fill-${item.key}`)
+    const msgEl  = document.getElementById(`dl-msg-${item.key}`)
+    try {
+      await new Promise((resolve, reject) => {
+        const es = new EventSource(`${API}${item.url}`)
+        es.onmessage = (e) => {
+          const data = JSON.parse(e.data)
+          if (data.error) { es.close(); reject(data.error); return }
+          fillEl.style.width  = `${data.pct}%`
+          msgEl.textContent   = data.msg
+          if (data.pct === 100) { es.close(); resolve() }
+        }
+        es.onerror = () => { es.close(); reject('Connection lost') }
+      })
+      _presence[item.type.toLowerCase() === 'tts' ? 'tts' : item.type.toLowerCase()][item.key] = true
+      msgEl.textContent   = '✓ Done'
+      fillEl.style.background = 'var(--green)'
+    } catch (err) {
+      msgEl.textContent = `✗ ${err}`
+      fillEl.style.background = 'var(--red)'
+      btn.disabled    = false
+      btn.textContent = 'Retry'
+      return
+    }
+  }
+
+  repopulatePresence()
+  restoreSelections(_settings)   // re-select same keys after repopulate
+  area.style.display  = 'none'
+  btn.disabled        = false
+  btn.textContent     = 'Launch'
+  doLaunch()
+}
+
+// ── Launch ────────────────────────────────────────────────────────────────────
+async function doLaunch() {
+  const btn    = document.getElementById('launch-btn')
+  const sttKey = document.getElementById('sel-stt').value
+  const ttsKey = document.getElementById('sel-tts').value
+  const llmKey = document.getElementById('sel-llm').value
+  const ttsModeMap = { voicevox: 'voicevox', kokoro: 'kokoro' }
+
+  btn.disabled = true
+  btn.classList.add('warming')
+
+  // Build warmup steps before doing anything else
+  const steps = []
+  if (llmKey !== 'remote' && _presence.llm[llmKey])
+    steps.push({ label: 'Starting LLM', url: `/llm/start/${llmKey}` })
+  if (ttsKey === 'voicevox' && _presence.tts['voicevox'])
+    steps.push({ label: 'Starting VOICEVOX', url: '/voicevox/start' })
+  if (sttKey !== 'remote' && _presence.stt[sttKey])
+    steps.push({ label: 'Loading STT', url: '/stt/load', body: { model: sttKey } })
+
+  // Fire settings save in background — POST /settings has health-check timeouts
+  // that can block up to ~9 s; we don't need to wait for those before warmup starts.
+  const savePromise = (async () => {
+    try {
+      const current = await fetch(`${API}/settings`).then(r => r.json())
+      await fetch(`${API}/settings`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...current,
+          stt_model: sttKey,
+          tts_mode:  ttsModeMap[ttsKey] || 'local',
+          llm_model: llmKey === 'remote' ? (current.llm_model || '') : llmKey,
+        }),
+      })
+    } catch (e) {
+      console.warn('Settings save failed:', e)
+    }
+  })()
+
+  if (steps.length === 0) {
+    btn.textContent = 'Loading…'
+    await savePromise
+  } else {
+    btn.textContent = 'Loading…'
+    for (let i = 0; i < steps.length; i++) {
+      const { label, url, body } = steps[i]
+      try {
+        const r = await fetch(`${API}${url}`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    body ? JSON.stringify(body) : undefined,
+        })
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ detail: r.statusText }))
+          console.warn(`${label} failed (${r.status}):`, err.detail || err)
+        }
+      } catch (e) {
+        console.warn(`${label} warmup failed:`, e)
+      }
+    }
+    await savePromise  // ensure persisted before navigating
+  }
+
+  btn.classList.remove('warming')
+  window.location.href = 'index.html'
+}
+
+document.getElementById('launch-btn').addEventListener('click', async () => {
+  const needed = getNeededDownloads()
+  if (needed.length > 0) {
+    doDownloads(needed)
+  } else {
+    doLaunch()
+  }
+})
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+// ── Console panel ─────────────────────────────────────────────────────────────
+function appendLog(entry) {
+  const out  = document.getElementById('console-output')
+  const line = document.createElement('div')
+  line.className = `log-line ${entry.level}`
+  line.textContent = entry.text
+  out.appendChild(line)
+  if (out.scrollHeight - out.scrollTop < out.clientHeight + 60) {
+    out.scrollTop = out.scrollHeight
+  }
+}
+
+function toggleConsole() {
+  const panel  = document.getElementById('console-panel')
+  const toggle = document.getElementById('console-toggle')
+  const isOpen = panel.classList.toggle('open')
+  toggle.classList.toggle('active', isOpen)
+  if (isOpen) document.getElementById('console-output').scrollTop = 99999
+}
+
+function clearConsole() {
+  document.getElementById('console-output').innerHTML = ''
+}
+
+if (window.api?.onLog) {
+  window.api.onLog(appendLog)
+  window.api.getLogHistory().then(lines => lines.forEach(appendLog))
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+checkInstall()
+</script>
+</body>
+</html>

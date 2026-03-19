@@ -1,8 +1,9 @@
 """
-TTS capability manager — thin router for now.
-Full engine abstraction added when voicevox_core (local) lands.
+TTS capability manager.
+Engines:
+  voicevox  — local subprocess (voicevox_engine binary, port 50021)
+  kokoro    — remote OpenAI-compat HTTP endpoint
 """
-from modules.tts.engines.tts_mlx    import mlx_tts_stream, AVAILABLE as MLX_AVAILABLE, SAMPLE_RATE as MLX_SAMPLE_RATE
 from modules.tts.engines.tts_remote import voicevox_tts
 
-__all__ = ["mlx_tts_stream", "MLX_AVAILABLE", "MLX_SAMPLE_RATE", "voicevox_tts"]
+__all__ = ["voicevox_tts"]

@@ -14,8 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from modules.tts.tts_manager import mlx_tts_stream, MLX_AVAILABLE, MLX_SAMPLE_RATE, voicevox_tts as _voicevox_tts
+from modules.tts.tts_manager import voicevox_tts as _voicevox_tts
 from modules.stt.stt_manager import stt_manager, MODELS as STT_MODELS, AVAILABLE as STT_AVAILABLE, DEFAULT_MODEL as STT_DEFAULT_MODEL
+from modules.llm.llm_manager import llm_manager, MODEL_FILES as LLM_MODEL_FILES, LLAMA_URL as LLM_LOCAL_URL
+from modules.tts.voicevox_manager import voicevox_manager
 
 # ── debug ──────────────────────────────────────────────────────────────────────
 DEBUG_RAW_SSE = False   # set True to print every raw SSE line from the LLM
@@ -62,10 +64,10 @@ def _vad_infer(samples: np.ndarray, state: np.ndarray):
 SETTINGS_PATH = Path(__file__).parent.parent / "data" / "settings.json"
 DEFAULT_SETTINGS = {
     "stt_endpoint":      "",
-    "stt_model":         "qwen3-0.6b-4bit",
+    "stt_model":         "qwen3-1.7b-4bit",
     "llm_endpoint":      "",
     "tts_endpoint":      "",
-    "tts_mode":          "kokoro",  # "local" = MLX, "kokoro" = OpenAI-compat, "voicevox" = VOICEVOX engine
+    "tts_mode":          "voicevox",
     "voicevox_speaker":  1,
     "llm_model":         "",
     "llm_api_key":       "",
@@ -101,25 +103,83 @@ def get_system_prompt(s: dict) -> str:
     label = {"en": "Current date and time", "ja": "現在の日時", "zh": "当前日期和时间"}.get(lang, "Current date and time")
     return f"{base}\n\n{label}: {now}"
 
+
+def _is_local_llm(s: dict) -> bool:
+    return s.get("llm_model", "") in _LOCAL_LLM_KEYS
+
+
+def _llm_extra(s: dict) -> dict:
+    """Extra JSON fields for the chat completions request.
+    Disables Qwen3 thinking mode on local models via chat_template_kwargs."""
+    if _is_local_llm(s):
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+    return {}
+
+# ── LLM / TTS helpers ─────────────────────────────────────────────────────────
+_LOCAL_LLM_KEYS = frozenset(LLM_MODEL_FILES.keys())
+
+def _llm_config(s: dict) -> tuple[str, dict, str]:
+    """Return (endpoint_base, auth_headers, model_name) for the current LLM setting."""
+    key = s.get("llm_model", "")
+    if key in _LOCAL_LLM_KEYS:
+        return LLM_LOCAL_URL, {}, "local-model"
+    endpoint = s.get("llm_endpoint", "").rstrip("/")
+    headers  = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
+    model    = s.get("llm_model") or "local-model"
+    return endpoint, headers, model
+
+
+async def _ensure_llm_running(s: dict) -> None:
+    """Start llama-server if a local model key is selected but not yet running."""
+    key = s.get("llm_model", "")
+    if key not in _LOCAL_LLM_KEYS:
+        return
+    if llm_manager.is_running() and llm_manager._active_key == key:
+        return
+    if not llm_manager.is_model_present(key):
+        raise RuntimeError(
+            f"Local model '{key}' is not downloaded — open the model selector to download it first."
+        )
+    print(f"[llm] starting llama-server for '{key}'…", flush=True)
+    await asyncio.to_thread(llm_manager.start, key)
+    print("[llm] llama-server ready", flush=True)
+
+def _voicevox_endpoint(s: dict) -> str:
+    """Return the active VOICEVOX endpoint (always local when tts_mode is voicevox)."""
+    if voicevox_manager.is_running():
+        return voicevox_manager.endpoint
+    # Never fall back to the remote tts_endpoint when voicevox mode is selected —
+    # caller should have ensured the engine is running via _ensure_voicevox_running.
+    if s.get("tts_mode") == "voicevox":
+        return voicevox_manager.endpoint   # will fail at connect time with a clear error
+    return s.get("tts_endpoint", "").rstrip("/")
+
+
+async def _ensure_voicevox_running(s: dict) -> None:
+    """Start voicevox_engine if it's the selected TTS mode and not yet running."""
+    if s.get("tts_mode") != "voicevox":
+        return
+    if voicevox_manager.is_running():
+        return
+    if not voicevox_manager.is_installed():
+        raise RuntimeError("VOICEVOX engine is not installed — open the launcher to download it.")
+    print("[tts] starting voicevox_engine…", flush=True)
+    await asyncio.to_thread(voicevox_manager.start)
+    print("[tts] voicevox_engine ready", flush=True)
+
 # ── app ────────────────────────────────────────────────────────────────────────
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.on_event("startup")
-async def _autoload_stt():
-    s = load_settings()
-    key = s.get("stt_model", STT_DEFAULT_MODEL)
-    if key == "remote":
-        return
-    print(f"[startup] loading STT model '{key}'…", flush=True)
-    try:
-        result = await asyncio.to_thread(stt_manager.load, key)
-        if result.get("cancelled"):
-            print("[startup] STT load cancelled", flush=True)
-        else:
-            print(f"[startup] STT model ready in {result.get('elapsed_ms')}ms", flush=True)
-    except Exception as e:
-        print(f"[startup] STT load failed: {e}", flush=True)
+async def _autoload_services():
+    """Placeholder — all services (LLM, VOICEVOX, STT) are started on Launch button click."""
+    pass
+
+@app.on_event("shutdown")
+async def _shutdown_services():
+    llm_manager.stop()
+    voicevox_manager.stop()
 
 def load_settings() -> dict:
     try:
@@ -163,13 +223,14 @@ _REFORMULATE_PROMPT = {
     "zh": "今天是{date}。将用户消息转换为简洁的网络搜索查询。只输出搜索查询，不需要解释或标点符号。",
 }
 
-async def _reformulate_query(endpoint: str, headers: dict, model: str, message: str, language: str = "ja") -> str:
+async def _reformulate_query(endpoint: str, headers: dict, model: str, message: str,
+                             language: str = "ja", extra: dict | None = None) -> str:
     """Quick non-streaming LLM call to turn a conversational message into a clean search query."""
     import datetime
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     prompt = _REFORMULATE_PROMPT.get(language, _REFORMULATE_PROMPT["en"]).format(date=date)
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=30, write=10, pool=5)) as c:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5)) as c:
             r = await c.post(
                 endpoint + "/v1/chat/completions",
                 headers=headers,
@@ -181,6 +242,7 @@ async def _reformulate_query(endpoint: str, headers: dict, model: str, message: 
                     ],
                     "stream": False,
                     "max_tokens": 30,
+                    **(extra or {}),
                 },
             )
             r.raise_for_status()
@@ -208,13 +270,159 @@ def search_web(query: str, max_results: int = 5) -> str:
 async def health():
     return {"status": "ok"}
 
+@app.get("/system/info")
+async def system_info():
+    from modules.system.system_info import get_system_info
+    return await asyncio.to_thread(get_system_info)
+
+@app.get("/system/services")
+async def services_status():
+    """Health check for all local services — binary installed + process running."""
+    from modules.llm.installer import is_installed as llama_installed
+    from modules.tts.installer  import is_installed as voicevox_installed
+    s = load_settings()
+    return {
+        "llama_server":    {"installed": llama_installed(),         "running": llm_manager.is_running(),         "model": llm_manager._active_key},
+        "voicevox_engine": {"installed": voicevox_installed(),      "running": voicevox_manager.is_running()},
+        "stt":             {"loaded": stt_manager.loaded_model is not None, "model": stt_manager.active_key},
+    }
+
+@app.get("/system/install-check")
+async def install_check():
+    from modules.llm.installer import is_installed as llama_installed
+    from modules.tts.installer  import is_installed as voicevox_installed
+    return {
+        "llama_server":    llama_installed(),
+        "voicevox_engine": voicevox_installed(),
+    }
+
+def _sse_install_stream(install_fn):
+    """Shared SSE helper: runs install_fn(cb) in a thread, streams progress."""
+    q    = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def cb(pct: int, msg: str):
+        loop.call_soon_threadsafe(q.put_nowait, {"pct": pct, "msg": msg})
+
+    async def run():
+        try:
+            await asyncio.to_thread(install_fn, cb)
+        except Exception as e:
+            await q.put({"error": str(e)})
+
+    task = asyncio.create_task(run())
+
+    async def stream():
+        while True:
+            try:
+                item = await asyncio.wait_for(q.get(), timeout=30)
+                yield f"data: {json.dumps(item)}\n\n"
+                if item.get("pct") == 100 or "error" in item:
+                    break
+            except asyncio.TimeoutError:
+                if task.done():
+                    break
+                yield ": keep-alive\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+@app.get("/system/install")
+async def system_install_llama():
+    from modules.llm.installer import install
+    return _sse_install_stream(install)
+
+@app.get("/system/voicevox-install")
+async def system_install_voicevox():
+    from modules.tts.installer import install
+    return _sse_install_stream(install)
+
+@app.get("/llm/status")
+async def llm_status():
+    return {"running": llm_manager.is_running(), "model": llm_manager._active_key}
+
+@app.get("/llm/models")
+async def llm_models():
+    return llm_manager.models_status()
+
+@app.post("/llm/start/{key}")
+async def llm_start(key: str):
+    from fastapi import HTTPException
+    if key not in _LOCAL_LLM_KEYS:
+        raise HTTPException(status_code=404, detail=f"Unknown model key: {key}")
+    if not llm_manager.is_model_present(key):
+        raise HTTPException(status_code=400, detail=f"Model '{key}' not downloaded")
+    try:
+        await asyncio.to_thread(llm_manager.start, key)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/llm/stop")
+async def llm_stop():
+    llm_manager.stop()
+    return {"ok": True}
+
+@app.get("/llm/download/{key}")
+async def llm_download(key: str):
+    if key not in _LOCAL_LLM_KEYS:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Unknown model key: {key}")
+
+    q    = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def cb(pct: int, msg: str):
+        loop.call_soon_threadsafe(q.put_nowait, {"pct": pct, "msg": msg})
+
+    async def run():
+        try:
+            await asyncio.to_thread(llm_manager.download_model, key, cb)
+        except Exception as e:
+            await q.put({"error": str(e)})
+
+    task = asyncio.create_task(run())
+
+    async def stream():
+        while True:
+            try:
+                item = await asyncio.wait_for(q.get(), timeout=60)
+                yield f"data: {json.dumps(item)}\n\n"
+                if item.get("pct") == 100 or "error" in item:
+                    break
+            except asyncio.TimeoutError:
+                if task.done():
+                    break
+                yield ": keep-alive\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+@app.get("/voicevox/status")
+async def voicevox_status():
+    return {
+        "running":   voicevox_manager.is_running(),
+        "installed": voicevox_manager.is_installed(),
+    }
+
+@app.post("/voicevox/start")
+async def voicevox_start():
+    from fastapi import HTTPException
+    if not voicevox_manager.is_installed():
+        raise HTTPException(status_code=400, detail="VOICEVOX engine is not installed")
+    if voicevox_manager.is_running():
+        return {"ok": True, "already_running": True}
+    try:
+        await asyncio.to_thread(voicevox_manager.start)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/settings")
 async def get_settings():
     return load_settings()
 
 class SettingsIn(BaseModel):
     stt_endpoint:     str = ""
-    stt_model:        str = "qwen3-0.6b-4bit"
+    stt_model:        str = "qwen3-1.7b-4bit"
     llm_endpoint:     str = ""
     tts_endpoint:     str = ""
     tts_mode:         str = "kokoro"
@@ -255,18 +463,62 @@ async def post_settings(body: SettingsIn):
                 pass
     return status
 
+def _stt_model_present(repo: str | None) -> bool:
+    """Check whether an mlx-community HF repo is in the local HF cache."""
+    if not repo:
+        return True   # remote sentinel — no local files needed
+    cache = Path.home() / ".cache" / "huggingface" / "hub"
+    name  = "models--" + repo.replace("/", "--")
+    return (cache / name / "snapshots").exists()
+
 @app.get("/stt/models")
 async def get_stt_models():
     return [
         {
-            "key": key,
-            "label": meta["label"],
-            "backend": meta["backend"],
-            "loaded": stt_manager.active_key == key and stt_manager.loaded_model is not None,
+            "key":       key,
+            "label":     meta["label"],
+            "backend":   meta["backend"],
+            "present":   _stt_model_present(meta.get("repo")),
+            "loaded":    stt_manager.active_key == key and stt_manager.loaded_model is not None,
             "available": meta["backend"] == "remote" or STT_AVAILABLE.get(meta["backend"], False),
         }
         for key, meta in STT_MODELS.items()
     ]
+
+@app.get("/stt/download/{key}")
+async def stt_download(key: str):
+    import threading
+    meta = STT_MODELS.get(key)
+    if not meta or meta["backend"] == "remote":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Unknown or non-local STT key: {key}")
+
+    repo = meta["repo"]
+
+    def download_stt(cb):
+        cb(0, "Connecting to Hugging Face…")
+        done  = threading.Event()
+        error = []
+
+        def run():
+            try:
+                from huggingface_hub import snapshot_download
+                snapshot_download(repo_id=repo)
+            except Exception as e:
+                error.append(e)
+            finally:
+                done.set()
+
+        threading.Thread(target=run, daemon=True).start()
+        pct = 5
+        while not done.wait(timeout=2):
+            cb(min(pct, 90), "Downloading from Hugging Face…")
+            pct = min(pct + 3, 90)
+        if error:
+            raise error[0]
+        cb(100, f"Ready: {key}")
+
+    return _sse_install_stream(download_stt)
 
 class SttLoadIn(BaseModel):
     model: str
@@ -317,11 +569,12 @@ class ChatIn(BaseModel):
 @app.post("/chat/stream")
 async def chat_stream(body: ChatIn):
     s = load_settings()
+    await _ensure_llm_running(s)
     messages = [{"role": "system", "content": get_system_prompt(s)}]
     messages += body.history[-10:]
+    _ep, _hdrs, _mdl = _llm_config(s)
     if s.get("search_online"):
-        _llm_headers = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
-        query = await _reformulate_query(s["llm_endpoint"].rstrip("/"), _llm_headers, s.get("llm_model") or "local-model", body.message, s.get("language", "ja"))
+        query = await _reformulate_query(_ep, _hdrs, _mdl, body.message, s.get("language", "ja"), extra=_llm_extra(s))
         results = await asyncio.to_thread(search_web, query)
         if DEBUG_SEARCH:
             print(f"[search] original: {body.message!r}\n[search] query:    {query!r}\n[search] results:\n{results}\n", flush=True)
@@ -330,21 +583,24 @@ async def chat_stream(body: ChatIn):
     messages.append({"role": "user", "content": body.message})
 
     async def stream() -> AsyncGenerator[bytes, None]:
-        # connect=10: fail fast if LM Studio is unreachable
-        # read=30: max silence between tokens before giving up
-        headers = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=30, write=10, pool=5)) as c:
-            async with c.stream("POST", s["llm_endpoint"].rstrip("/") + "/v1/chat/completions", #/api/chat/completions for openwebui
-                                 headers=headers,
-                                 json={"model": s.get("llm_model") or "local-model", 
-                                       "messages": messages, "stream": True,
-                                       #"tool_ids": ["local_web_search"]
-                                       }) as r:
-                async for line in r.aiter_lines():
-                    if DEBUG_RAW_SSE:
-                        print(f"[sse/chat] {line}", flush=True)
-                    if line.startswith("data: "):
-                        yield (line + "\n\n").encode()
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5)) as c:
+                async with c.stream("POST", _ep + "/v1/chat/completions",
+                                     headers=_hdrs,
+                                     json={"model": _mdl, "messages": messages, "stream": True,
+                                           **_llm_extra(s)}) as r:
+                    if r.status_code >= 400:
+                        body = await r.aread()
+                        yield f"data: {{\"error\": \"LLM returned {r.status_code}: {body.decode()[:200]}\"}}\n\n".encode()
+                        return
+                    async for line in r.aiter_lines():
+                        if DEBUG_RAW_SSE:
+                            print(f"[sse/chat] {line}", flush=True)
+                        if line.startswith("data: "):
+                            yield (line + "\n\n").encode()
+        except Exception as e:
+            print(f"[chat] stream error: {e}", flush=True)
+            yield f"data: {{\"error\": \"{str(e)[:200]}\"}}\n\n".encode()
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 
@@ -352,36 +608,21 @@ class TTSIn(BaseModel):
     text: str
     language: str = "en"
 
-@app.get("/tts/mlx-available")
-async def tts_mlx_available():
-    return {"available": MLX_AVAILABLE}
-
 @app.post("/tts")
 async def tts(body: TTSIn):
     s = load_settings()
+    await _ensure_voicevox_running(s)
     voice    = s.get(f"voice_{body.language}", s["voice_en"])
     tts_lang = TTS_LANGUAGE_MAP.get(body.language, "English")
-
-    if s.get("tts_mode") == "local" and MLX_AVAILABLE:
-        # collect all chunks into a single WAV for the PTT REST response
-        pcm_chunks = []
-        async for chunk in mlx_tts_stream(body.text, voice, tts_lang):
-            pcm_chunks.append(chunk)
-        samples = np.frombuffer(b"".join(pcm_chunks), dtype=np.float32)
-        import io
-        buf = io.BytesIO()
-        sf.write(buf, samples, MLX_SAMPLE_RATE, format="WAV", subtype="PCM_16")
-        buf.seek(0)
-        return Response(content=buf.read(), media_type="audio/wav")
 
     async with httpx.AsyncClient(timeout=30) as c:
         if s.get("tts_mode") == "voicevox":
             speaker = int(s.get("voicevox_speaker") or 1)
-            wav = await _voicevox_tts(c, body.text, speaker, s["tts_endpoint"])
+            wav = await _voicevox_tts(c, body.text, speaker, _voicevox_endpoint(s))
         else:  # kokoro / OpenAI-compat
             r = await c.post(
                 s["tts_endpoint"].rstrip("/") + "/v1/audio/speech",
-                json={"model": "qwen3-tts", "input": body.text, "voice": voice, "language": tts_lang, "response_format": "wav"},
+                json={"model": "kokoro", "input": body.text, "voice": voice, "language": tts_lang, "response_format": "wav"},
             )
             r.raise_for_status()
             wav = r.content
@@ -406,18 +647,20 @@ class TranslateIn(BaseModel):
 @app.post("/translate")
 async def translate_text(body: TranslateIn):
     s = load_settings()
+    await _ensure_llm_running(s)
     target = body.target or s.get("translate_to", "en")
     target_name = _TRANSLATE_LANG_NAMES.get(target, target)
     system = f"Translate the following to {target_name}. Output only the translation, no explanation."
-    headers = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
+    _ep, _hdrs, _mdl = _llm_config(s)
 
     async def stream() -> AsyncGenerator[bytes, None]:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=30, write=10, pool=5)) as c:
-            async with c.stream("POST", s["llm_endpoint"].rstrip("/") + "/v1/chat/completions",
-                                 headers=headers,
-                                 json={"model": s.get("llm_model") or "local-model", "stream": True,
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5)) as c:
+            async with c.stream("POST", _ep + "/v1/chat/completions",
+                                 headers=_hdrs,
+                                 json={"model": _mdl, "stream": True,
                                        "messages": [{"role": "system", "content": system},
-                                                    {"role": "user",   "content": body.text}]}) as r:
+                                                    {"role": "user",   "content": body.text}],
+                                       **_llm_extra(s)}) as r:
                 async for line in r.aiter_lines():
                     if line.startswith("data: "):
                         yield (line + "\n\n").encode()
@@ -426,6 +669,11 @@ async def translate_text(body: TranslateIn):
 
 @app.post("/shutdown")
 async def shutdown():
+    # Stop subprocesses before exiting — os._exit() bypasses the FastAPI
+    # shutdown event so we must do cleanup here explicitly.
+    stt_manager.unload()
+    llm_manager.stop()
+    voicevox_manager.stop()
     asyncio.get_event_loop().call_later(0.1, os._exit, 0)
     return {"status": "shutting down"}
 
@@ -458,9 +706,11 @@ async def live(ws: WebSocket):
     async def process_turn(pcm: bytes):
         nonlocal processing
         processing = True
-        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=30, write=10, pool=5))
+        client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=10, pool=5))
         active_reqs.append(client)
         try:
+            await _ensure_llm_running(s)
+            await _ensure_voicevox_running(s)
             wav = pcm_to_wav(pcm)
             stt_model = s.get("stt_model", STT_DEFAULT_MODEL)
             if stt_model != "remote":
@@ -486,9 +736,9 @@ async def live(ws: WebSocket):
 
             conv_messages.append({"role": "user", "content": transcript})
             messages = [{"role": "system", "content": get_system_prompt(s)}]
+            _ep, _hdrs, _mdl = _llm_config(s)
             if s.get("search_online"):
-                _llm_headers = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
-                query = await _reformulate_query(s["llm_endpoint"].rstrip("/"), _llm_headers, s.get("llm_model") or "local-model", transcript, s.get("language", "ja"))
+                query = await _reformulate_query(_ep, _hdrs, _mdl, transcript, s.get("language", "ja"), extra=_llm_extra(s))
                 results = await asyncio.to_thread(search_web, query)
                 if DEBUG_SEARCH:
                     print(f"[search] original: {transcript!r}\n[search] query:    {query!r}\n[search] results:\n{results}\n", flush=True)
@@ -497,11 +747,10 @@ async def live(ws: WebSocket):
             messages += conv_messages[-20:]
 
             full_text = ""
-            llm_headers = {"Authorization": f"Bearer {s['llm_api_key']}"} if s.get("llm_api_key") else {}
-            async with client.stream("POST", s["llm_endpoint"].rstrip("/") + "/v1/chat/completions",
-                                     headers=llm_headers,
-                                     json={"model": s.get("llm_model") or "local-model", "stream": True,
-                                           "messages": messages}) as resp:
+            async with client.stream("POST", _ep + "/v1/chat/completions",
+                                     headers=_hdrs,
+                                     json={"model": _mdl, "stream": True,
+                                           "messages": messages, **_llm_extra(s)}) as resp:
                 async for line in resp.aiter_lines():
                     if DEBUG_RAW_SSE:
                         print(f"[sse/live] {line}", flush=True)
@@ -521,19 +770,16 @@ async def live(ws: WebSocket):
                 conv_messages.append({"role": "assistant", "content": full_text})
                 voice    = s.get(f"voice_{s['language']}", s["voice_en"])
                 tts_lang = TTS_LANGUAGE_MAP.get(s["language"], "English")
-                await send_json({"type": "tts_start", "sample_rate": MLX_SAMPLE_RATE if s.get("tts_mode") == "local" else 24000})
+                await send_json({"type": "tts_start", "sample_rate": 24000})
 
-                if s.get("tts_mode") == "local" and MLX_AVAILABLE:
-                    async for pcm_chunk in mlx_tts_stream(full_text, voice, tts_lang):
-                        await ws.send_bytes(pcm_chunk)
-                elif s.get("tts_mode") == "voicevox":
+                if s.get("tts_mode") == "voicevox":
                     speaker = int(s.get("voicevox_speaker") or 1)
-                    wav = await _voicevox_tts(client, full_text, speaker, s["tts_endpoint"])
+                    wav = await _voicevox_tts(client, full_text, speaker, _voicevox_endpoint(s))
                     await ws.send_bytes(wav)
                 else:  # kokoro / OpenAI-compat
                     r2 = await client.post(
                         s["tts_endpoint"].rstrip("/") + "/v1/audio/speech",
-                        json={"model": "qwen3-tts", "input": full_text, "voice": voice, "language": tts_lang, "response_format": "wav"},
+                        json={"model": "kokoro", "input": full_text, "voice": voice, "language": tts_lang, "response_format": "wav"},
                     )
                     r2.raise_for_status()
                     await ws.send_bytes(r2.content)

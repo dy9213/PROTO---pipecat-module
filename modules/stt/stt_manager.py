@@ -24,7 +24,7 @@ MODELS: dict[str, dict] = {
     "remote":          {"repo": None,                                    "backend": "remote",      "engine": stt_remote,  "label": "Remote (OpenAI-compat)"},
 }
 
-DEFAULT_MODEL = "qwen3-0.6b-4bit"
+DEFAULT_MODEL = "qwen3-1.7b-4bit"
 
 # Available backends — checked at import time via engine modules
 AVAILABLE: dict[str, bool] = {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Voice Chat</title>
+<title>🍙 OniChat</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -42,6 +42,7 @@
     align-items: center;
     justify-content: space-between;
     padding-right: 10px;
+    position: relative;
   }
   #config-toggle {
     display: flex;
@@ -69,6 +70,100 @@
     border-color: var(--green);
     color: var(--green);
   }
+
+  #keys-btn {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #keys-btn:hover { color: var(--text); }
+
+  /* ── keyboard shortcut popup ── */
+  #keys-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.55);
+    align-items: center;
+    justify-content: center;
+  }
+  #keys-overlay.open { display: flex; }
+  #keys-popup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    width: 380px;
+    max-width: calc(100vw - 40px);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  #keys-popup h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+  .keys-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .keys-group-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    opacity: 0.6;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .keys-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .keys-row .desc {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .keys-combo {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 26px;
+    white-space: nowrap;
+  }
+  .keys-plus { font-size: 10px; color: var(--text-dim); }
   #config-chevron { transition: transform 0.2s; font-size: 10px; }
   #config-bar.open #config-chevron { transform: rotate(180deg); }
   #config-panel {
@@ -381,7 +476,7 @@
   }
 
   /* typing indicator */
-  .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+  .typing-dots { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
   .typing-dots span {
     width: 6px; height: 6px;
     background: var(--text-dim);
@@ -390,6 +485,13 @@
   }
   .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
   .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  .typing-timer {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+  }
   @keyframes bounce {
     0%, 80%, 100% { transform: translateY(0); }
     40%            { transform: translateY(-5px); }
@@ -601,88 +703,173 @@
     white-space: nowrap;
   }
   #ctx-menu button:hover { background: var(--surface2); }
+
+  /* ── Console panel ── */
+  #console-toggle {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: var(--surface1, #1c1c1e);
+    border: none;
+    color: var(--muted, #8e8e93);
+    font-size: 11px;
+    font-family: monospace;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    z-index: 1000;
+    user-select: none;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #console-toggle:hover { color: var(--fg, #f5f5f7); }
+  #console-toggle.active { color: #3fb950; }
+
+  #console-panel {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 16px;
+    width: 620px;
+    max-width: calc(100vw - 32px);
+    height: 280px;
+    background: #0a0e13;
+    border: 1px solid var(--border, #3a3a3c);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 999;
+    flex-direction: column;
+  }
+  #console-panel.open { display: flex; }
+  #console-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border, #3a3a3c);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #console-toolbar span { font-size: 11px; color: var(--muted, #8e8e93); flex: 1; font-family: monospace; }
+  #console-clear {
+    font-size: 10px;
+    color: var(--muted, #8e8e93);
+    cursor: pointer;
+    padding: 2px 8px;
+    border: 1px solid var(--border, #3a3a3c);
+    border-radius: 4px;
+    background: transparent;
+    font-family: monospace;
+  }
+  #console-clear:hover { color: var(--fg, #f5f5f7); }
+  #console-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: "SF Mono", "Fira Mono", monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-line.stdout { color: #c9d1d9; }
+  .log-line.stderr { color: #f0883e; }
 </style>
 </head>
 <body>
+
+<!-- Console toggle button -->
+<button id="console-toggle" onclick="toggleConsole()">⌨ log</button>
+
+<!-- Console panel -->
+<div id="console-panel">
+  <div id="console-toolbar">
+    <span>backend console</span>
+    <button id="console-clear" onclick="clearConsole()">clear</button>
+  </div>
+  <div id="console-output"></div>
+</div>
+
+<!-- Keyboard shortcuts popup -->
+<div id="keys-overlay" onclick="closeKeysPopup()">
+  <div id="keys-popup" onclick="event.stopPropagation()">
+    <h2>Keyboard Shortcuts</h2>
+
+    <div class="keys-group">
+      <div class="keys-group-title">Voice (PTT)</div>
+      <div class="keys-row">
+        <div class="desc">Hold to record, release to send</div>
+        <div class="keys-combo"><kbd>Space</kbd></div>
+      </div>
+      <div class="keys-row">
+        <div class="desc">Cancel recording</div>
+        <div class="keys-combo"><kbd>Esc</kbd></div>
+      </div>
+    </div>
+
+    <div class="keys-group">
+      <div class="keys-group-title">Playback</div>
+      <div class="keys-row">
+        <div class="desc">Play last assistant message</div>
+        <div class="keys-combo"><kbd>←</kbd></div>
+      </div>
+      <div class="keys-row">
+        <div class="desc">Play last user message</div>
+        <div class="keys-combo"><kbd>→</kbd></div>
+      </div>
+    </div>
+
+    <div class="keys-group">
+      <div class="keys-group-title">Translate</div>
+      <div class="keys-row">
+        <div class="desc">Hide translation</div>
+        <div class="keys-combo"><kbd>↑</kbd></div>
+      </div>
+      <div class="keys-row">
+        <div class="desc">Show translation</div>
+        <div class="keys-combo"><kbd>↓</kbd></div>
+      </div>
+    </div>
+
+    <div class="keys-group">
+      <div class="keys-group-title">Chat</div>
+      <div class="keys-row">
+        <div class="desc">Delete last exchange</div>
+        <div class="keys-combo"><kbd>⌫</kbd></div>
+      </div>
+      <div class="keys-row">
+        <div class="desc">Send text message</div>
+        <div class="keys-combo"><kbd>Enter</kbd></div>
+      </div>
+      <div class="keys-row">
+        <div class="desc">New line in text input</div>
+        <div class="keys-combo"><kbd>Shift</kbd><span class="keys-plus">+</span><kbd>Enter</kbd></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Config bar -->
 <div id="config-bar">
   <div id="config-bar-header">
     <div id="config-toggle" onclick="toggleConfig()">
       <span id="config-chevron">▼</span>
-      <span>Config</span>
+      <span>Preferences</span>
       <span id="config-warning" style="color:#e09944;font-size:11px;margin-left:6px;display:none">⚠ Not configured</span>
     </div>
+    <button id="keys-btn" onclick="toggleKeysPopup()">⌨ Keyboard Shortcut</button>
     <button id="online-btn" onclick="toggleOnline()">🌐 Offline</button>
   </div>
   <div id="config-panel">
-    <div class="endpoint-row" id="stt-model-row">
-      <label>STT</label>
-      <select id="stt-model-select" onchange="onSttModelChange()"></select>
-      <button id="stt-load-btn" onclick="loadSttModel()">Load</button>
-      <span id="stt-load-status"></span>
-    </div>
-    <div class="endpoint-row" id="stt-endpoint-row" style="display:none">
-      <label></label>
-      <input id="stt-input" type="text" placeholder="http://…" spellcheck="false">
-      <div class="status-dot" id="dot-stt"></div>
-    </div>
-    <div class="endpoint-row">
-      <label>LLM</label>
-      <input id="llm-input" type="text" placeholder="http://…" spellcheck="false">
-      <div class="status-dot" id="dot-llm"></div>
-    </div>
-    <div class="endpoint-row">
-      <label>TTS</label>
-      <input id="tts-input" type="text" placeholder="http://…" spellcheck="false">
-      <button id="tts-mode-btn" onclick="toggleTtsMode()" title="Click to cycle: Kokoro → VoiceVox → Local MLX">Kokoro</button>
-      <div class="status-dot" id="dot-tts"></div>
-    </div>
-    <div class="endpoint-row" id="voicevox-speaker-row" style="display:none">
-      <label>Speaker</label>
-      <input id="voicevox-speaker-input" type="number" min="0" value="1" style="width:80px" title="VOICEVOX speaker ID">
-    </div>
-    <div class="endpoint-row">
-      <label>Model</label>
-      <input id="model-input" type="text" placeholder="model name" spellcheck="false">
-      <div class="status-dot" style="visibility:hidden"></div>
-    </div>
-    <div class="endpoint-row">
-      <label>Key</label>
-      <input id="llm-key-input" type="password" placeholder="API key (optional)" spellcheck="false">
-      <div class="status-dot" style="visibility:hidden"></div>
-    </div>
     <div class="config-actions">
       <div class="lang-toggle">
-        <button class="lang-btn active" id="lang-en" onclick="setLang('en')">EN</button>
-        <button class="lang-btn"        id="lang-ja" onclick="setLang('ja')">JP</button>
-        <button class="lang-btn"        id="lang-zh" onclick="setLang('zh')">ZH</button>
-      </div>
-      <span style="font-size:11px;color:var(--text-dim);flex-shrink:0">→</span>
-      <div class="lang-toggle">
-        <button class="lang-btn active" id="trans-en" onclick="setTranslateTo('en')">EN</button>
-        <button class="lang-btn"        id="trans-ja" onclick="setTranslateTo('ja')">JP</button>
-        <button class="lang-btn"        id="trans-zh" onclick="setTranslateTo('zh')">ZH</button>
-      </div>
-      <div class="lang-toggle">
         <button class="lang-btn" onclick="adjustScale(-10)">A−</button>
-        <span id="scale-label" style="font-size:10px;color:var(--text-dim);padding:0 4px;min-width:34px;text-align:center">100%</span>
+        <span id="scale-label" style="font-size:12px;color:var(--text-dim);padding:0 4px;min-width:34px;text-align:center;display:flex;align-items:center;justify-content:center">100%</span>
         <button class="lang-btn" onclick="adjustScale(+10)">A+</button>
       </div>
       <button id="save-btn" onclick="saveEndpoints()">Save</button>
       <span id="save-status"></span>
     </div>
     <div class="system-prompt-row">
-      <label>System Prompt — EN</label>
-      <textarea id="system-prompt-en" class="system-prompt-input" placeholder="You are a helpful voice assistant. Respond concisely in English." spellcheck="false" rows="3"></textarea>
-    </div>
-    <div class="system-prompt-row" style="margin-top:6px">
       <label>System Prompt — JA</label>
       <textarea id="system-prompt-ja" class="system-prompt-input" placeholder="あなたは役立つ音声アシスタントです。日本語で簡潔に回答してください。" spellcheck="false" rows="3"></textarea>
-    </div>
-    <div class="system-prompt-row" style="margin-top:6px">
-      <label>System Prompt — ZH</label>
-      <textarea id="system-prompt-zh" class="system-prompt-input" placeholder="你是一个有用的语音助手。请用中文简洁地回答。" spellcheck="false" rows="3"></textarea>
     </div>
   </div>
 </div>
@@ -803,6 +990,13 @@ async function loadSettings() {
 
 function toggleConfig() {
   document.getElementById('config-bar').classList.toggle('open')
+}
+
+function toggleKeysPopup() {
+  document.getElementById('keys-overlay').classList.toggle('open')
+}
+function closeKeysPopup() {
+  document.getElementById('keys-overlay').classList.remove('open')
 }
 
 async function toggleOnline() {
@@ -1017,7 +1211,7 @@ function startAssistantBubble() {
   wrap.id = id
   const bubble = document.createElement('div')
   bubble.className = 'bubble'
-  bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>'
+  bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span><span class="typing-timer" id="timer-' + id + '"></span></div>'
   wrap.appendChild(bubble)
   chatList.appendChild(wrap)
   scrollBottom()
@@ -1161,6 +1355,14 @@ async function streamLLMResponse(userText) {
   let full = ''
   llmAbortController = new AbortController()
   setStopBtn(true)
+
+  // Elapsed-time ticker on the dots bubble
+  const startTs = Date.now()
+  const timerEl = document.getElementById('timer-' + bubbleId)
+  const timerInterval = setInterval(() => {
+    if (timerEl) timerEl.textContent = ((Date.now() - startTs) / 1000).toFixed(0) + 's'
+  }, 1000)
+
   try {
     const r = await fetch(`${API}/chat/stream`, {
       method: 'POST',
@@ -1172,7 +1374,7 @@ async function streamLLMResponse(userText) {
     const reader = r.body.getReader()
     const dec = new TextDecoder()
     let buf = ''
-    while (true) {
+    outer: while (true) {
       const { done, value } = await reader.read()
       if (done) break
       buf += dec.decode(value, { stream: true })
@@ -1181,24 +1383,35 @@ async function streamLLMResponse(userText) {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue
         const d = line.slice(6)
-        if (d === '[DONE]') break
+        if (d === '[DONE]') break outer
         try {
-          const tok = JSON.parse(d).choices?.[0]?.delta?.content
+          const parsed = JSON.parse(d)
+          if (parsed.error) throw new Error(parsed.error)
+          const tok = parsed.choices?.[0]?.delta?.content
           if (tok) { full += tok; updateAssistantBubble(bubbleId, full) }
-        } catch {}
+        } catch (parseErr) {
+          if (parseErr.message !== parseErr.message?.match(/JSON/)?.[0]) throw parseErr
+        }
       }
     }
   } catch (e) {
+    clearInterval(timerInterval)
     document.getElementById(bubbleId)?.remove()
     if (e.name !== 'AbortError') throw e
-    return null  // aborted before DONE — always undo the user prompt
+    return null  // aborted — caller handles undo
   } finally {
+    clearInterval(timerInterval)
     llmAbortController = null
   }
+
   setStopBtn(false)
   if (full) {
     updateAssistantBubble(bubbleId, full, true)
     chatHistory.push({ role: 'assistant', content: full, source: 'text', timestamp: Date.now() })
+  } else {
+    // Stream closed with no tokens — remove dots and surface an error
+    document.getElementById(bubbleId)?.remove()
+    throw new Error('No response from LLM — check the console log for details')
   }
   return full
 }
@@ -1933,6 +2146,7 @@ function deleteLatestBlock() {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeKeysPopup(); return }
   if (e.code !== 'Backspace' && e.code !== 'Delete') return
   const active = document.activeElement
   if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return
@@ -2113,6 +2327,35 @@ document.getElementById('ctx-ask').addEventListener('click', () => {
     .catch(err => { if (err.name !== 'AbortError') appendErrorMessage('Error: ' + err.message) })
     .finally(() => { setStopBtn(false); document.getElementById('send-btn').disabled = false })
 })
+
+// ── Console panel ─────────────────────────────────────────────────────────────
+function appendLog(entry) {
+  const out  = document.getElementById('console-output')
+  const line = document.createElement('div')
+  line.className = `log-line ${entry.level}`
+  line.textContent = entry.text
+  out.appendChild(line)
+  if (out.scrollHeight - out.scrollTop < out.clientHeight + 60) {
+    out.scrollTop = out.scrollHeight
+  }
+}
+
+function toggleConsole() {
+  const panel  = document.getElementById('console-panel')
+  const toggle = document.getElementById('console-toggle')
+  const isOpen = panel.classList.toggle('open')
+  toggle.classList.toggle('active', isOpen)
+  if (isOpen) document.getElementById('console-output').scrollTop = 99999
+}
+
+function clearConsole() {
+  document.getElementById('console-output').innerHTML = ''
+}
+
+if (window.api?.onLog) {
+  window.api.onLog(appendLog)
+  window.api.getLogHistory().then(lines => lines.forEach(appendLog))
+}
 
 // ── init ───────────────────────────────────────────────────────────────────────
 loadSettings()
