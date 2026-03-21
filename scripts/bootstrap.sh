@@ -11,8 +11,9 @@ set -e
 
 VENV_DIR="${1:-$(pwd)/venv}"
 
-# ── Python / venv setup ───────────────────────────────────────────────────────
-# Prefer bundled uv (production), fall back to system uv, then system python3
+# ── Locate or download uv ─────────────────────────────────────────────────────
+# Priority: bundled uv → system uv → download uv via curl
+# Never falls back to system python3 — avoids triggering macOS Python installer.
 if [ -n "$ONICHAT_UV" ] && [ -x "$ONICHAT_UV" ]; then
   UV="$ONICHAT_UV"
   echo "Using bundled uv: $UV"
@@ -20,24 +21,30 @@ elif command -v uv &>/dev/null; then
   UV="$(which uv)"
   echo "Using system uv: $UV"
 else
-  UV=""
-fi
-
-if [ -n "$UV" ]; then
-  "$UV" venv --python 3.12 "$VENV_DIR"
-  "$UV" pip install --python "$VENV_DIR/bin/python" -r backend/requirements.txt
-  "$UV" pip install --python "$VENV_DIR/bin/python" mlx-audio
-else
-  PYTHON=$(which python3.12 2>/dev/null || which python3.11 2>/dev/null || which python3.10 2>/dev/null || which python3 2>/dev/null || echo "")
-  if [ -z "$PYTHON" ]; then
-    echo "Error: python3 not found and uv is not available."
+  echo "uv not found — downloading to a temporary location…"
+  UV_TMP_DIR="$(mktemp -d)"
+  # uv's official installer writes the binary to ~/.cargo/bin by default;
+  # instead we pull the binary directly for the current platform (macOS arm64).
+  UV_BIN="$UV_TMP_DIR/uv"
+  UV_URL="https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz"
+  if ! curl -fsSL "$UV_URL" | tar -xz -C "$UV_TMP_DIR" --strip-components=1 2>/dev/null; then
+    echo "Error: failed to download uv. Check your internet connection."
+    rm -rf "$UV_TMP_DIR"
     exit 1
   fi
-  echo "Using system python: $PYTHON"
-  "$PYTHON" -m venv "$VENV_DIR"
-  "$VENV_DIR/bin/pip" install --upgrade pip
-  "$VENV_DIR/bin/pip" install -r backend/requirements.txt
-  "$VENV_DIR/bin/pip" install mlx-audio
+  UV="$UV_BIN"
+  chmod +x "$UV"
+  echo "Downloaded uv to $UV"
+fi
+
+# ── Create venv and install dependencies ─────────────────────────────────────
+"$UV" venv --python 3.12 "$VENV_DIR"
+"$UV" pip install --python "$VENV_DIR/bin/python" -r backend/requirements.txt
+"$UV" pip install --python "$VENV_DIR/bin/python" mlx-audio
+
+# Clean up temporary uv download if used
+if [ -n "$UV_TMP_DIR" ]; then
+  rm -rf "$UV_TMP_DIR"
 fi
 
 mkdir -p "$(dirname "$VENV_DIR")/data"

@@ -1,6 +1,6 @@
 {
   "name": "onichat",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "OniChat — local voice chat with Japanese TTS and ASR",
   "main": "electron/main.js",
   "scripts": {

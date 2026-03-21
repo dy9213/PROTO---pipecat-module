@@ -71,18 +71,23 @@ function pollHealth(resolve, reject, attempts = 0) {
   }).on('error', () => setTimeout(() => pollHealth(resolve, reject, attempts + 1), 500))
 }
 
-// ── bootstrap ─────────────────────────────────────────────────────────────────
-function runBootstrap() {
-  return new Promise((resolve, reject) => {
-    const venvDest = path.join(USER_DATA, 'venv')
-    const proc = spawn('bash', [path.join(APP_ROOT, 'scripts', 'bootstrap.sh'), venvDest], {
-      cwd: APP_ROOT,
-      stdio: 'inherit',
-      env: { ...process.env, ONICHAT_UV: path.join(APP_ROOT, 'scripts', 'bin', 'uv') },
-    })
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Bootstrap failed (${code})`)))
+// ── bootstrap IPC ─────────────────────────────────────────────────────────────
+ipcMain.handle('needs-bootstrap', () => !fs.existsSync(VENV_PYTHON))
+
+ipcMain.handle('run-bootstrap', () => new Promise((resolve, reject) => {
+  const proc = spawn('bash', [path.join(APP_ROOT, 'scripts', 'bootstrap.sh'), path.join(USER_DATA, 'venv')], {
+    cwd: APP_ROOT,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ONICHAT_UV: path.join(APP_ROOT, 'scripts', 'bin', 'uv') },
   })
-}
+  const send = (d) => String(d).split('\n').forEach(line => {
+    if (line.trim() && mainWindow && !mainWindow.isDestroyed())
+      mainWindow.webContents.send('bootstrap-log', line)
+  })
+  proc.stdout.on('data', send)
+  proc.stderr.on('data', send)
+  proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Bootstrap failed (${code})`)))
+}))
 
 // ── kill any stale process holding the backend port ───────────────────────────
 function killPortOwner(port) {
@@ -148,41 +153,17 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
-// ── app lifecycle ─────────────────────────────────────────────────────────────
-app.whenReady().then(async () => {
-  if (!fs.existsSync(VENV_PYTHON)) {
-    // Show bootstrap window — keep it open (never close it) to avoid
-    // triggering window-all-closed → app.quit() before backend starts.
-    mainWindow = new BrowserWindow({ width: 500, height: 200, resizable: false,
-      webPreferences: { contextIsolation: true } })
-    mainWindow.loadURL(`data:text/html,<body style="font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#111;color:#fff">
-      <div>Setting up Python environment…</div></body>`)
-    try {
-      await runBootstrap()
-    } catch (err) {
-      mainWindow.loadURL(`data:text/html,<body style="font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#111;color:#f55">
-        <div>Bootstrap failed: ${err.message}</div></body>`)
-      return
-    }
-    // Transition bootstrap window into the main window instead of closing it
-    mainWindow.setSize(900, 700)
-    mainWindow.setMinimumSize(700, 500)
-    mainWindow.setResizable(true)
-    mainWindow.webPreferences = { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
+// ── start-backend IPC (called by loader.html after bootstrap) ─────────────────
+ipcMain.handle('start-backend', async () => {
+  if (!backendProc) {
+    await Promise.all([killPortOwner(BACKEND_PORT), killPortOwner(50021)])
+    startBackend()
   }
-
-  await Promise.all([killPortOwner(BACKEND_PORT), killPortOwner(50021)])
-  startBackend()
-
   await new Promise((resolve, reject) => pollHealth(resolve, reject))
-
-  if (mainWindow) {
-    // Reuse bootstrap window — reload into loader
-    mainWindow.loadFile(path.join(APP_ROOT, 'app', 'loader.html'))
-  } else {
-    createWindow()
-  }
 })
+
+// ── app lifecycle ─────────────────────────────────────────────────────────────
+app.whenReady().then(() => { createWindow() })
 
 app.on('window-all-closed', () => app.quit())
 

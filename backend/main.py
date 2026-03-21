@@ -764,6 +764,11 @@ async def live(ws: WebSocket):
                 transcript = r.json().get("text", "").strip()
             if not transcript:
                 return
+            # If the interrupt handler fired while the STT thread was running it
+            # will have already called aclose() on client and cleared active_reqs.
+            # Return silently so the stale transcript is never sent to the frontend.
+            if client not in active_reqs:
+                return
             await send_json({"type": "transcript", "text": transcript, "final": True})
 
             conv_messages.append({"role": "user", "content": transcript})
@@ -771,7 +776,16 @@ async def live(ws: WebSocket):
             _ep, _hdrs, _mdl = _llm_config(s)
             if s.get("search_online"):
                 query = await _reformulate_query(_ep, _hdrs, _mdl, transcript, s.get("language", "ja"), extra=_llm_extra(s))
+                # _reformulate_query uses its own internal client not tracked by
+                # active_reqs, so it cannot be cancelled mid-flight.  Discard
+                # the result silently if an interrupt arrived while it was running.
+                if client not in active_reqs:
+                    return
                 results = await asyncio.to_thread(search_web, query)
+                # search_web runs in a thread and cannot be cancelled — discard
+                # its result silently if an interrupt fired while it was running.
+                if client not in active_reqs:
+                    return
                 if DEBUG_SEARCH:
                     print(f"[search] original: {transcript!r}\n[search] query:    {query!r}\n[search] results:\n{results}\n", flush=True)
                 if results:
@@ -818,7 +832,12 @@ async def live(ws: WebSocket):
 
                 await send_json({"type": "tts_end"})
         except Exception as e:
-            await send_json({"type": "error", "message": str(e)})
+            # Only forward genuine errors to the frontend.
+            # If the interrupt handler already removed this client from active_reqs
+            # the exception was caused by our own aclose() call — swallow it silently
+            # so the frontend never sees {"type": "error"} from an interrupt.
+            if client in active_reqs:
+                await send_json({"type": "error", "message": str(e)})
         finally:
             processing = False
             try:
