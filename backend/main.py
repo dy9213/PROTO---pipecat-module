@@ -84,12 +84,18 @@ DEFAULT_SETTINGS = {
     "system_prompt_zh":  "",
     "search_online":     False,
     "translate_to":      "en",
+    "voicevox_speed":    1.0,
 }
 TTS_LANGUAGE_MAP = {
     "en": "English",
     "ja": "Japanese",
     "zh": "Chinese",
 }
+
+# Single-slot cache for the last VOICEVOX synthesis result.
+# Keyed on (text, speaker, speed) — any change invalidates automatically.
+# Avoids re-calling VOICEVOX when the user replays the same assistant message.
+_tts_cache: dict | None = None
 
 DEFAULT_SYSTEM_PROMPTS = {
     "en": "You are a helpful voice assistant. Respond concisely in English.",
@@ -468,8 +474,9 @@ class SettingsIn(BaseModel):
     system_prompt_en: str = ""
     system_prompt_ja: str = ""
     system_prompt_zh: str = ""
-    search_online:    bool = False
-    translate_to:     str  = "en"
+    search_online:    bool  = False
+    translate_to:     str   = "en"
+    voicevox_speed:   float = 1.0
 
 @app.post("/settings")
 async def post_settings(body: SettingsIn):
@@ -642,16 +649,25 @@ class TTSIn(BaseModel):
 
 @app.post("/tts")
 async def tts(body: TTSIn):
-    s = load_settings()
-    await _ensure_voicevox_running(s)
+    global _tts_cache
+    s        = load_settings()
     voice    = s.get(f"voice_{body.language}", s["voice_en"])
     tts_lang = TTS_LANGUAGE_MAP.get(body.language, "English")
 
-    async with httpx.AsyncClient(timeout=30) as c:
-        if s.get("tts_mode") == "voicevox":
-            speaker = int(s.get("voicevox_speaker") or 2)
-            wav = await _voicevox_tts(c, body.text, speaker, _voicevox_endpoint(s))
-        else:  # kokoro / OpenAI-compat
+    if s.get("tts_mode") == "voicevox":
+        speaker = int(s.get("voicevox_speaker") or 2)
+        speed   = float(s.get("voicevox_speed") or 1.0)
+        if (_tts_cache
+                and _tts_cache["text"]    == body.text
+                and _tts_cache["speaker"] == speaker
+                and _tts_cache["speed"]   == speed):
+            return Response(content=_tts_cache["wav"], media_type="audio/wav")
+        await _ensure_voicevox_running(s)
+        async with httpx.AsyncClient(timeout=30) as c:
+            wav = await _voicevox_tts(c, body.text, speaker, _voicevox_endpoint(s), speed=speed)
+        _tts_cache = {"text": body.text, "speaker": speaker, "speed": speed, "wav": wav}
+    else:  # kokoro / OpenAI-compat
+        async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(
                 s["tts_endpoint"].rstrip("/") + "/v1/audio/speech",
                 json={"model": "kokoro", "input": body.text, "voice": voice, "language": tts_lang, "response_format": "wav"},
@@ -820,7 +836,8 @@ async def live(ws: WebSocket):
 
                 if s.get("tts_mode") == "voicevox":
                     speaker = int(s.get("voicevox_speaker") or 2)
-                    wav = await _voicevox_tts(client, full_text, speaker, _voicevox_endpoint(s))
+                    speed   = float(s.get("voicevox_speed") or 1.0)
+                    wav = await _voicevox_tts(client, full_text, speaker, _voicevox_endpoint(s), speed=speed)
                     await ws.send_bytes(wav)
                 else:  # kokoro / OpenAI-compat
                     r2 = await client.post(

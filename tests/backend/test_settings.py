@@ -67,6 +67,7 @@ class TestPostSettings:
             "stt_model": "qwen3-1.7b-4bit",
             "tts_mode": "voicevox",
             "voicevox_speaker": 2,
+            "voicevox_speed": 1.0,
             "language": "ja",
             "llm_model": "",
             "llm_api_key": "",
@@ -101,6 +102,25 @@ class TestPostSettings:
         client.post("/settings", json=self._minimal_settings(system_prompt_en=prompt))
         resp = client.get("/settings")
         assert resp.json()["system_prompt_en"] == prompt
+
+    def test_voicevox_speed_round_trip(self, client, isolated_settings):
+        client.post("/settings", json=self._minimal_settings(voicevox_speed=1.5))
+        resp = client.get("/settings")
+        assert resp.json()["voicevox_speed"] == pytest.approx(1.5)
+
+    def test_voicevox_speed_default_is_1(self, client):
+        resp = client.get("/settings")
+        assert resp.json()["voicevox_speed"] == pytest.approx(1.0)
+
+    def test_voicevox_speed_min(self, client, isolated_settings):
+        client.post("/settings", json=self._minimal_settings(voicevox_speed=0.5))
+        resp = client.get("/settings")
+        assert resp.json()["voicevox_speed"] == pytest.approx(0.5)
+
+    def test_voicevox_speed_max(self, client, isolated_settings):
+        client.post("/settings", json=self._minimal_settings(voicevox_speed=1.5))
+        resp = client.get("/settings")
+        assert resp.json()["voicevox_speed"] == pytest.approx(1.5)
 
     def test_returns_service_status_dict(self, client):
         resp = client.post("/settings", json=self._minimal_settings())

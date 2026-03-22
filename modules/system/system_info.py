@@ -29,11 +29,11 @@ TTS_CATALOG = [
 # size_gb = runtime memory (weights + KV cache @ 4k ctx + compute buffers)
 # file_gb = download size (weights only)
 LLM_CATALOG = [
-    {"key": "qwen3.5-2b-q4km",  "label": "Qwen3.5  2B Q4_K_M",     "size_gb": 1.8,  "file_gb": 1.33},
-    {"key": "qwen3.5-4b-q4km",  "label": "Qwen3.5  4B Q4_K_M",     "size_gb": 3.7,  "file_gb": 2.87},
-    {"key": "qwen3.5-9b-q4km",  "label": "Qwen3.5  9B Q4_K_M",     "size_gb": 7.1,  "file_gb": 5.89},
-    {"key": "qwen3.5-27b-q4km", "label": "Qwen3.5 27B Q4_K_M",     "size_gb": 19.0, "file_gb": 17.13},
-    {"key": "qwen3.5-35b-q4km", "label": "Qwen3.5 35B-A3B Q4_K_M", "size_gb": 23.0, "file_gb": 21.40},
+    {"key": "qwen3.5-2b-q4km",  "label": "Qwen3.5  2B Q4_K_M",     "size_gb": 1.8,  "file_gb": 1.4},
+    {"key": "qwen3.5-4b-q4km",  "label": "Qwen3.5  4B Q4_K_M",     "size_gb": 3.7,  "file_gb": 2.9},
+    {"key": "qwen3.5-9b-q4km",  "label": "Qwen3.5  9B Q4_K_M",     "size_gb": 7.1,  "file_gb": 5.9},
+    {"key": "qwen3.5-27b-q4km", "label": "Qwen3.5 27B Q4_K_M",     "size_gb": 19.0, "file_gb": 17.2},
+    {"key": "qwen3.5-35b-q4km", "label": "Qwen3.5 35B-A3B Q4_K_M", "size_gb": 23.0, "file_gb": 21.4},
 ]
 
 _IGNORE = {

@@ -330,7 +330,7 @@ async def test_interrupt_during_voicevox_no_error():
 
     # voicevox_tts is async — this is fine as a side_effect since the mock
     # awaits async side_effects automatically when the mock itself is awaited.
-    async def blocking_voicevox(client, text, speaker, endpoint):
+    async def blocking_voicevox(client, text, speaker, endpoint, speed=1.0):
         tts_started.set()
         await asyncio.sleep(30)   # blocks — will be interrupted by aclose()
         return b"RIFF\x00\x00\x00\x00WAVEfmt "
@@ -449,7 +449,7 @@ async def test_post_tts_end_interrupt_preserves_turn():
     doesn't reset it) so the frontend decision tree picks the badge path.
     This is tested in live.test.js; here we verify the backend response.
     """
-    async def instant_voicevox(client, text, speaker, endpoint):  # noqa: E501
+    async def instant_voicevox(client, text, speaker, endpoint, speed=1.0):
         return b"RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
 
     def fast_llm_stream(*args, **kwargs):

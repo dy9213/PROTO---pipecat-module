@@ -834,7 +834,7 @@ function populate(id, models, useFileGb = false, presenceMap = null) {
     const present  = presenceMap ? (presenceMap[m.key] ?? false) : null
     const check    = present === true ? '✓ ' : (present === false ? '↓ ' : '')
     opt.value       = m.key
-    opt.textContent = check + m.label + (size > 0 ? ` — ${size} GB` : '')
+    opt.textContent = check + m.label + (size > 0 ? ` — ${size.toFixed(1)} GB` : '')
     sel.appendChild(opt)
   })
 }
@@ -973,7 +973,7 @@ function updateSizeLabel(id, gb) {
     el.textContent = '—'
     el.className   = 'model-size zero'
   } else {
-    el.textContent = `${gb} GB`
+    el.textContent = `${gb.toFixed(1)} GB`
     el.className   = 'model-size'
   }
 }

@@ -215,6 +215,11 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
+  #voicevox-speed-slider {
+    flex: 1;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
   .system-prompt-input {
     width: 100%;
     box-sizing: border-box;
@@ -231,11 +236,43 @@
   }
   .system-prompt-input:focus { border-color: var(--accent); }
 
-  .config-actions {
+  .config-controls-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-start;
+    position: relative;
     margin-top: 2px;
+  }
+  .text-size-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    flex: 1;
+  }
+  .speed-center-group {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 50%;
+  }
+  .speed-slider-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    width: 100%;
+    /* match lang-toggle height so slider centre === A−/100%/A+ centre */
+    min-height: 29px;
+  }
+  .ctrl-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   .lang-toggle {
     display: flex;
@@ -532,7 +569,7 @@
     transition: background 0.2s;
   }
   /* 3-second arc — SVG overlay */
-  #mic-btn svg {
+  #arc-svg {
     position: absolute; top: 0; left: 0;
     width: 38px; height: 38px;
     transform: rotate(-90deg);
@@ -582,7 +619,8 @@
   #send-btn:disabled { opacity: 0.4; cursor: default; }
 
   #translate-btn {
-    padding: 0 12px;
+    padding: 0;
+    width: 38px;
     height: 38px;
     background: transparent;
     border: 1px solid var(--border);
@@ -591,6 +629,7 @@
     font-size: 12px;
     cursor: pointer;
     flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
     transition: border-color 0.15s, color 0.15s;
   }
   #translate-btn:hover { border-color: var(--accent); color: var(--text); }
@@ -744,7 +783,7 @@
 <body>
 
 <!-- Console toggle button -->
-<button id="console-toggle" onclick="toggleConsole()">⌨ log</button>
+<button id="console-toggle" onclick="toggleConsole()">log</button>
 
 <!-- Console panel -->
 <div id="console-panel">
@@ -822,18 +861,36 @@
       <span>Preferences</span>
       <span id="config-warning" style="color:#e09944;font-size:11px;margin-left:6px;display:none">⚠ Not configured</span>
     </div>
-    <button id="keys-btn" onclick="toggleKeysPopup()">⌨ Keyboard Shortcut</button>
+    <button id="keys-btn" onclick="toggleKeysPopup()">Keyboard Shortcut</button>
     <button id="online-btn" onclick="toggleOnline()">🌐 Offline</button>
   </div>
   <div id="config-panel">
-    <div class="config-actions">
-      <div class="lang-toggle">
-        <button class="lang-btn" onclick="adjustScale(-10)">A−</button>
-        <span id="scale-label" style="font-size:12px;color:var(--text-dim);padding:0 4px;min-width:34px;text-align:center;display:flex;align-items:center;justify-content:center">100%</span>
-        <button class="lang-btn" onclick="adjustScale(+10)">A+</button>
+    <div class="config-controls-row">
+      <div class="text-size-group">
+        <span class="ctrl-label">Text Size</span>
+        <div class="lang-toggle">
+            <button class="lang-btn" onclick="adjustScale(-10)">A−</button>
+            <span id="scale-label" style="font-size:12px;color:var(--text-dim);padding:0 4px;min-width:34px;text-align:center;display:flex;align-items:center;justify-content:center">100%</span>
+            <button class="lang-btn" onclick="adjustScale(+10)">A+</button>
+          </div>
       </div>
-      <button id="save-btn" onclick="saveEndpoints()">Save</button>
-      <span id="save-status"></span>
+      <div class="speed-center-group" id="voicevox-speed-row">
+        <span class="ctrl-label">Speed</span>
+        <div class="speed-slider-row">
+          <span></span>
+          <input id="voicevox-speed-slider" type="range" min="0.5" max="1.5" step="0.05" value="1.0"
+                 style="width:110px"
+                 oninput="document.getElementById('voicevox-speed-value').textContent=parseFloat(this.value).toFixed(2)+'×'">
+          <span id="voicevox-speed-value" style="font-size:12px;color:var(--text);padding-left:4px">1.00×</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:1">
+        <span class="ctrl-label" style="visibility:hidden">x</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button id="save-btn" onclick="saveEndpoints()">Save</button>
+          <span id="save-status"></span>
+        </div>
+      </div>
     </div>
     <div class="system-prompt-row">
       <label>System Prompt — JA</label>
@@ -865,15 +922,20 @@
 <div id="input-bar">
   <div class="input-row">
     <div id="mic-btn">
-      🎙
-      <svg viewBox="0 0 38 38">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+        <rect x="9" y="2" width="6" height="11" rx="3"/>
+        <path d="M5 11a7 7 0 0 0 14 0"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="9" y1="22" x2="15" y2="22"/>
+      </svg>
+      <svg id="arc-svg" viewBox="0 0 38 38">
         <circle cx="19" cy="19" r="17" id="arc-track"/>
         <circle cx="19" cy="19" r="17" id="arc-fill"/>
       </svg>
     </div>
     <textarea id="text-input" placeholder="Type a message…" rows="1"></textarea>
     <button id="stop-btn" onclick="stopGeneration()" style="display:none">Stop</button>
-    <button id="translate-btn" onclick="translateInput()" title="Translate to chat language">⇄</button>
+    <button id="translate-btn" onclick="handleTranslateBtn()" title="Translate to chat language">⇄</button>
     <button id="send-btn" onclick="sendText()">Send</button>
   </div>
   <div id="space-hint">Hold SPACEBAR to speak · Keep holding after speaking for LIVE-CHAT</div>
@@ -927,6 +989,7 @@ let searchOnline     = false
 let liveTtsSampleRate = 24000     // updated from tts_start event
 let chatHistory      = []
 let _hiddenSettings  = {}  // full settings blob — round-tripped for fields with no UI input
+let inputTranslated  = false  // true after translate succeeds; flips button to "Speak"
 
 // ── DOM refs ───────────────────────────────────────────────────────────────────
 const chatList  = document.getElementById('chat-list')
@@ -948,6 +1011,12 @@ async function loadSettings() {
     sttModel     = s.stt_model   || 'qwen3-0.6b-4bit'
     searchOnline = !!s.search_online
     updateOnlineUI()
+    const speed = parseFloat(s.voicevox_speed) || 1.0
+    const slider = document.getElementById('voicevox-speed-slider')
+    if (slider) {
+      slider.value = speed
+      document.getElementById('voicevox-speed-value').textContent = speed.toFixed(2) + '×'
+    }
   } catch (e) { console.error('[loadSettings]', e) }
 }
 
@@ -1004,6 +1073,7 @@ function updateTtsModeUI() {}
 function checkConfigWarning() {}
 
 async function saveEndpoints() {
+  const speedSlider = document.getElementById('voicevox-speed-slider')
   const s = {
     ..._hiddenSettings,
     language:         currentLang,
@@ -1012,6 +1082,7 @@ async function saveEndpoints() {
     stt_model:        sttModel,
     search_online:    searchOnline,
     system_prompt_ja: document.getElementById('system-prompt-ja').value.trim(),
+    voicevox_speed:   speedSlider ? parseFloat(speedSlider.value) : 1.0,
   }
   document.getElementById('save-status').textContent = 'Saving…'
   try {
@@ -1266,6 +1337,25 @@ async function streamLLMResponse(userText) {
 }
 
 // ── text send ──────────────────────────────────────────────────────────────────
+function _setTranslateMode() {
+  const btn = document.getElementById('translate-btn')
+  btn.innerHTML = '⇄'
+  btn.title = 'Translate to chat language'
+  inputTranslated = false
+}
+
+function _setSpeakMode() {
+  const btn = document.getElementById('translate-btn')
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="margin-left:2px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`
+  btn.title = 'Speak translated text'
+  inputTranslated = true
+}
+
+function handleTranslateBtn() {
+  if (inputTranslated) speakTranslated()
+  else translateInput()
+}
+
 async function translateInput() {
   const text = textInput.value.trim()
   if (!text) return
@@ -1273,8 +1363,7 @@ async function translateInput() {
   btn.disabled = true
   btn.classList.add('translating')
   textInput.disabled = true
-  const orig = btn.textContent
-  btn.textContent = '⇄'
+  let translatedText = ''
   try {
     const r = await fetch(`${API}/translate`, {
       method: 'POST',
@@ -1284,7 +1373,7 @@ async function translateInput() {
     if (!r.ok) throw new Error(`${r.status}`)
     const reader = r.body.getReader()
     const dec = new TextDecoder()
-    let buf = '', result = '', firstToken = true
+    let buf = '', firstToken = true
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -1299,8 +1388,8 @@ async function translateInput() {
           const token = JSON.parse(d).choices?.[0]?.delta?.content
           if (token) {
             if (firstToken) { textInput.value = ''; firstToken = false }
-            result += token
-            textInput.value = result
+            translatedText += token
+            textInput.value = translatedText
           }
         } catch {}
       }
@@ -1308,12 +1397,20 @@ async function translateInput() {
   } catch (e) {
     console.error('translate error', e)
   } finally {
-    btn.textContent = orig
     btn.disabled = false
     btn.classList.remove('translating')
     textInput.disabled = false
     textInput.focus()
+    if (translatedText) _setSpeakMode()
+    else _setTranslateMode()
   }
+}
+
+async function speakTranslated() {
+  const text = textInput.value.trim()
+  if (!text) return
+  _setTranslateMode()
+  await fetchAndPlayTTS(text)
 }
 
 async function sendText() {
@@ -1332,6 +1429,10 @@ async function sendText() {
     document.getElementById('send-btn').disabled = false
   }
 }
+
+textInput.addEventListener('input', () => {
+  if (inputTranslated) _setTranslateMode()
+})
 
 textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText() }
